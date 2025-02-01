@@ -17,7 +17,7 @@ export const RARITY_SCALES = {
 
 export const BROADCAST_INTERVAL = 50;
 export const INTERPOLATION_SPEED = 0.15;
-export const CURSOR_TIMEOUT = 5000;
+export const CURSOR_TIMEOUT = 600000; // 10 minutes in milliseconds
 export const STRUCTURE_DAMAGE = 10;
 export const STRUCTURE_MAX_HEALTH = 1000;
 export const GATHER_INTERVAL = 2000;

@@ -14,7 +14,6 @@ import { useWorldControls } from './world/hooks/useWorldControls';
 import {
   TOWN_CENTER,
   TOWN_RADIUS,
-  CURSOR_TIMEOUT,
   STRUCTURE_DAMAGE,
   STRUCTURE_MAX_HEALTH
 } from './world/constants';
@@ -41,10 +40,24 @@ export const World: React.FC = () => {
     structures,
     worldResources,
     afkTimeout,
-    teleportToCastle
+    teleportToCastle,
+    loadStructures,
+    loadWorldResources
   } = useGameStore();
   
   const [userId] = useState(() => crypto.randomUUID());
+
+  // Load initial state
+  useEffect(() => {
+    const initializeGameState = async () => {
+      await Promise.all([
+        loadStructures(),
+        loadWorldResources()
+      ]);
+    };
+    
+    initializeGameState();
+  }, [loadStructures, loadWorldResources]);
 
   const resetAFKTimer = useAFKDetection(afkTimeout, setIsAFK);
   const { cursors, updateCursorPosition } = useCursorSync(
@@ -91,14 +104,20 @@ export const World: React.FC = () => {
     }
   }, [draggingStructure, isDraggingLeaderboard]);
 
+  const handleClick = useCallback(() => {
+    resetAFKTimer();
+  }, [resetAFKTimer]);
+
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('click', handleClick);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('click', handleClick);
     };
-  }, [handleMouseMove, handleMouseUp]);
+  }, [handleMouseMove, handleMouseUp, handleClick]);
 
   const handleResourceClick = async (resource: WorldResource) => {
     resetAFKTimer();
@@ -163,9 +182,11 @@ export const World: React.FC = () => {
   ];
 
   const topPlayers = allPlayers
-    .filter(player => Date.now() - player.lastUpdate < CURSOR_TIMEOUT)
+    .filter(player => Date.now() - player.lastUpdate < 30000)
     .sort((a, b) => b.points - a.points)
     .slice(0, 5);
+
+  const uniqueResources = Array.from(new Map(worldResources.map(r => [r.id, r])).values());
 
   return (
     <>
@@ -248,6 +269,7 @@ export const World: React.FC = () => {
           emoji={cursorEmoji}
           username={username}
           resources={resources}
+          isOwnCursor={true}
         />
 
         <div 
@@ -257,7 +279,7 @@ export const World: React.FC = () => {
             cursor: placingStructure ? 'crosshair' : 'default'
           }}
         >
-          {worldResources.map((resource) => (
+          {uniqueResources.map((resource) => (
             <ResourceNode
               key={resource.id}
               resource={resource}
@@ -282,6 +304,8 @@ export const World: React.FC = () => {
               emoji={cursor.emoji}
               username={cursor.username}
               resources={cursor.points}
+              isOwnCursor={false}
+              isAFK={cursor.isAFK}
             />
           ))}
         </div>

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
-import { BROADCAST_INTERVAL, CURSOR_TIMEOUT, INTERPOLATION_SPEED } from '../constants';
+import { BROADCAST_INTERVAL, INTERPOLATION_SPEED } from '../constants';
+
+const CURSOR_TIMEOUT = 30000; // 30 seconds before cursor disappears
 
 export interface CursorWithInterpolation {
   id: string;
@@ -14,6 +16,7 @@ export interface CursorWithInterpolation {
   targetX: number;
   targetY: number;
   lastUpdate: number;
+  isAFK: boolean;
 }
 
 export const useCursorSync = (
@@ -38,11 +41,17 @@ export const useCursorSync = (
           cursor => now - cursor.lastUpdate < CURSOR_TIMEOUT
         );
         
-        return activeCursors.map(cursor => ({
-          ...cursor,
-          currentX: cursor.currentX + (cursor.targetX - cursor.currentX) * INTERPOLATION_SPEED,
-          currentY: cursor.currentY + (cursor.targetY - cursor.currentY) * INTERPOLATION_SPEED,
-        }));
+        return activeCursors.map(cursor => {
+          const timeSinceUpdate = now - cursor.lastUpdate;
+          const isAFK = timeSinceUpdate > 5000; // Mark as AFK after 5 seconds of no updates
+          
+          return {
+            ...cursor,
+            currentX: cursor.currentX + (cursor.targetX - cursor.currentX) * INTERPOLATION_SPEED,
+            currentY: cursor.currentY + (cursor.targetY - cursor.currentY) * INTERPOLATION_SPEED,
+            isAFK
+          };
+        });
       });
 
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -66,9 +75,7 @@ export const useCursorSync = (
 
     channel
       .on('broadcast', { event: 'cursor' }, ({ payload }) => {
-        if (isAFK) return;
-        
-        const cursor = payload as Omit<CursorWithInterpolation, 'currentX' | 'currentY' | 'targetX' | 'targetY' | 'lastUpdate'>;
+        const cursor = payload as Omit<CursorWithInterpolation, 'currentX' | 'currentY' | 'targetX' | 'targetY' | 'lastUpdate' | 'isAFK'>;
         setCursors(prevCursors => {
           const now = Date.now();
           const existingIndex = prevCursors.findIndex(c => c.id === cursor.id);
@@ -80,7 +87,8 @@ export const useCursorSync = (
               ...cursor,
               targetX: cursor.x,
               targetY: cursor.y,
-              lastUpdate: now
+              lastUpdate: now,
+              isAFK: false
             };
             return updated;
           }
@@ -91,7 +99,8 @@ export const useCursorSync = (
             currentY: cursor.y,
             targetX: cursor.x,
             targetY: cursor.y,
-            lastUpdate: now
+            lastUpdate: now,
+            isAFK: false
           }];
         });
       })
@@ -104,11 +113,11 @@ export const useCursorSync = (
     return () => {
       channel.unsubscribe();
     };
-  }, [userId, isAFK]);
+  }, [userId]);
 
   const updateCursorPosition = (x: number, y: number) => {
     const now = Date.now();
-    if (now - lastBroadcastRef.current < BROADCAST_INTERVAL || isAFK) return;
+    if (now - lastBroadcastRef.current < BROADCAST_INTERVAL) return;
     
     lastBroadcastRef.current = now;
     if (channelRef.current) {

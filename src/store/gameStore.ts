@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '../lib/supabase';
-import { getRandomSpawnPosition, selectRandomResource } from '../config/lootTable';
+import { getRandomSpawnPosition, selectRandomResource, LOOT_TABLE } from '../config/lootTable';
+import { RESOURCE_BALANCE, calculateResourceDeficit, getResourceTypeByProbability } from '../config/resourceBalance';
 
 interface GameState {
   worldPosition: { x: number; y: number };
@@ -69,10 +70,12 @@ const STRUCTURE_MAX_HEALTH = 1000;
 const RETRIEVE_COST = 50;
 const DEFAULT_AFK_TIMEOUT = 5000;
 
-// Track spawning state to prevent multiple spawns
 let isSpawning = false;
 let resourceChannel: any = null;
 let structureChannel: any = null;
+let balanceInterval: number | null = null;
+
+const cleanId = (id: string, prefix: string) => id.replace(`${prefix}-`, '');
 
 const transformDatabaseStructure = (dbStructure: any): Structure => ({
   id: dbStructure.id,
@@ -99,6 +102,61 @@ const transformDatabaseResource = (dbResource: any): WorldResource => ({
   valuePerClick: dbResource.value_per_click,
   emoji: dbResource.emoji
 });
+
+async function balanceResources() {
+  const store = useGameStore.getState();
+  const deficit = calculateResourceDeficit(store.worldResources, RESOURCE_BALANCE.maxDistance);
+  
+  if (deficit > 0) {
+    const batchSize = Math.min(deficit, RESOURCE_BALANCE.spawnBatchSize);
+    const spawnPromises = [];
+
+    for (let i = 0; i < batchSize; i++) {
+      const rarity = getResourceTypeByProbability();
+      const resource = LOOT_TABLE.find(r => r.rarity === rarity);
+      if (!resource) continue;
+
+      const position = getRandomSpawnPosition(store.worldResources);
+      
+      spawnPromises.push(
+        supabase
+          .from('resources')
+          .insert({
+            type: resource.type,
+            rarity: resource.rarity,
+            position_x: position.x,
+            position_y: position.y,
+            max_health: resource.stats.maxHealth,
+            current_health: resource.stats.maxHealth,
+            value_per_click: resource.stats.valuePerClick,
+            emoji: resource.emoji
+          })
+          .select()
+      );
+    }
+
+    try {
+      await Promise.all(spawnPromises);
+    } catch (error) {
+      console.error('Error balancing resources:', error);
+    }
+  }
+}
+
+function startResourceBalancing() {
+  if (balanceInterval) return;
+  balanceInterval = window.setInterval(balanceResources, RESOURCE_BALANCE.checkInterval);
+}
+
+function stopResourceBalancing() {
+  if (balanceInterval) {
+    window.clearInterval(balanceInterval);
+    balanceInterval = null;
+  }
+}
+
+startResourceBalancing();
+window.addEventListener('unload', stopResourceBalancing);
 
 const spawnNewResource = async () => {
   if (isSpawning) return null;
@@ -132,11 +190,10 @@ const spawnNewResource = async () => {
   } finally {
     setTimeout(() => {
       isSpawning = false;
-    }, 1000); // Keep spawning locked for 1 second
+    }, 1000);
   }
 };
 
-// Initialize subscriptions
 if (resourceChannel) {
   resourceChannel.unsubscribe();
 }
@@ -175,7 +232,9 @@ resourceChannel = supabase
         }
         case 'INSERT': {
           const newResource = transformDatabaseResource(payload.new);
-          store.syncWorldResources([...store.worldResources, newResource]);
+          if (!store.worldResources.some(r => r.id === newResource.id)) {
+            store.syncWorldResources([...store.worldResources, newResource]);
+          }
           break;
         }
       }
@@ -213,7 +272,9 @@ structureChannel = supabase
         }
         case 'INSERT': {
           const newStructure = transformDatabaseStructure(payload.new);
-          store.syncStructures([...store.structures, newStructure]);
+          if (!store.structures.some(s => s.id === newStructure.id)) {
+            store.syncStructures([...store.structures, newStructure]);
+          }
           break;
         }
       }
@@ -221,7 +282,7 @@ structureChannel = supabase
   )
   .subscribe();
 
-export const useGameStore = create<GameState>()(
+const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       worldPosition: { x: 0, y: 0 },
@@ -245,7 +306,10 @@ export const useGameStore = create<GameState>()(
           if (error) throw error;
 
           const transformedStructures = structures.map(transformDatabaseStructure);
-          set({ structures: transformedStructures });
+          const uniqueStructures = Array.from(
+            new Map(transformedStructures.map(s => [s.id, s])).values()
+          );
+          set({ structures: uniqueStructures });
         } catch (error) {
           console.error('Error loading structures:', error);
         }
@@ -255,13 +319,17 @@ export const useGameStore = create<GameState>()(
         try {
           const { data: resources, error } = await supabase
             .from('resources')
-            .select('*')
-            .gt('current_health', 0);
+            .select('*');
 
           if (error) throw error;
 
-          const transformedResources = resources.map(transformDatabaseResource);
-          set({ worldResources: transformedResources });
+          const transformedResources = resources?.map(transformDatabaseResource) || [];
+          const uniqueResources = Array.from(
+            new Map(transformedResources.map(r => [r.id, r])).values()
+          );
+          
+          set({ worldResources: uniqueResources });
+          await balanceResources();
         } catch (error) {
           console.error('Error loading resources:', error);
         }
@@ -313,10 +381,7 @@ export const useGameStore = create<GameState>()(
 
           if (error) throw error;
 
-          const transformedStructure = transformDatabaseStructure(newStructure);
-
           set((state) => ({
-            structures: [...state.structures, transformedStructure],
             inventory: {
               ...state.inventory,
               pickaxes: state.inventory.pickaxes - 1
@@ -329,7 +394,8 @@ export const useGameStore = create<GameState>()(
 
       damageStructure: async (id, damage) => {
         try {
-          const structure = get().structures.find(s => s.id === id);
+          const structureId = cleanId(id, 'structure');
+          const structure = get().structures.find(s => s.id === structureId);
           if (!structure) return;
 
           const newHealth = Math.max(0, structure.health - damage);
@@ -337,15 +403,9 @@ export const useGameStore = create<GameState>()(
           const { error } = await supabase
             .from('structures')
             .update({ health: newHealth })
-            .eq('id', id);
+            .eq('id', structureId);
 
           if (error) throw error;
-
-          set((state) => ({
-            structures: state.structures.map(s =>
-              s.id === id ? { ...s, health: newHealth } : s
-            )
-          }));
         } catch (error) {
           console.error('Error damaging structure:', error);
         }
@@ -353,16 +413,13 @@ export const useGameStore = create<GameState>()(
 
       removeStructure: async (id) => {
         try {
+          const structureId = cleanId(id, 'structure');
           const { error } = await supabase
             .from('structures')
             .delete()
-            .eq('id', id);
+            .eq('id', structureId);
 
           if (error) throw error;
-
-          set((state) => ({
-            structures: state.structures.filter(s => s.id !== id)
-          }));
         } catch (error) {
           console.error('Error removing structure:', error);
         }
@@ -372,15 +429,15 @@ export const useGameStore = create<GameState>()(
         try {
           if (get().resources < RETRIEVE_COST) return;
 
+          const structureId = cleanId(id, 'structure');
           const { error } = await supabase
             .from('structures')
             .delete()
-            .eq('id', id);
+            .eq('id', structureId);
 
           if (error) throw error;
 
           set((state) => ({
-            structures: state.structures.filter(s => s.id !== id),
             resources: state.resources - RETRIEVE_COST,
             inventory: {
               ...state.inventory,
@@ -394,23 +451,16 @@ export const useGameStore = create<GameState>()(
 
       updateStructurePosition: async (id, x, y) => {
         try {
+          const structureId = cleanId(id, 'structure');
           const { error } = await supabase
             .from('structures')
             .update({
               position_x: x,
               position_y: y
             })
-            .eq('id', id);
+            .eq('id', structureId);
 
           if (error) throw error;
-
-          set((state) => ({
-            structures: state.structures.map(structure =>
-              structure.id === id
-                ? { ...structure, position: { x, y } }
-                : structure
-            )
-          }));
         } catch (error) {
           console.error('Error updating structure position:', error);
         }
@@ -418,52 +468,58 @@ export const useGameStore = create<GameState>()(
 
       damageResource: async (id: string, damage: number) => {
         try {
-          const resource = get().worldResources.find(r => r.id === id);
+          const resourceId = cleanId(id, 'resource');
+          const resource = get().worldResources.find(r => r.id === resourceId);
           if (!resource) return;
 
           const newHealth = Math.max(0, resource.currentHealth - damage);
-          const rewardAmount = resource.valuePerClick;
 
-          // Update local state immediately for better UX
+          // Add resources immediately
           set((state) => ({
-            worldResources: state.worldResources.map(r =>
-              r.id === id ? { ...r, currentHealth: newHealth } : r
-            ),
-            resources: state.resources + rewardAmount
+            resources: state.resources + resource.valuePerClick
           }));
 
           if (newHealth <= 0) {
-            // Delete the resource
             const { error: deleteError } = await supabase
               .from('resources')
               .delete()
-              .eq('id', id);
+              .eq('id', resourceId);
 
             if (deleteError) throw deleteError;
 
-            // Only spawn a new resource if we successfully deleted the old one
             await spawnNewResource();
           } else {
-            // Update the resource health
             const { error: updateError } = await supabase
               .from('resources')
               .update({ current_health: newHealth })
-              .eq('id', id);
+              .eq('id', resourceId);
 
             if (updateError) throw updateError;
           }
         } catch (error) {
           console.error('Error damaging resource:', error);
-          // Revert local state if there was an error
           await get().loadWorldResources();
         }
       },
 
-      syncStructures: (structures) => set({ structures }),
-      syncWorldResources: (resources) => set({ worldResources: resources })
+      syncStructures: (structures) => {
+        const uniqueStructures = Array.from(
+          new Map(structures.map(s => [s.id, s])).values()
+        );
+        set({ structures: uniqueStructures });
+      },
+      
+      syncWorldResources: (resources) => {
+        const uniqueResources = Array.from(
+          new Map(resources.map(r => [r.id, r])).values()
+        );
+        set({ worldResources: uniqueResources });
+      }
     }),
     {
       name: 'game-storage',
     }
   )
 );
+
+export { useGameStore };
