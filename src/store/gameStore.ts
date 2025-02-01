@@ -219,13 +219,12 @@ resourceChannel = supabase
     },
     async (payload) => {
       const store = useGameStore.getState();
+      const { user } = store;
       
       switch (payload.eventType) {
         case 'DELETE': {
-          const resource = store.worldResources.find(r => r.id === payload.old.id);
-          if (resource) {
-            store.addResources(resource.valuePerClick);
-          }
+          // Only sync the world resources, don't give rewards here
+          // as rewards are now handled in damageResource
           store.syncWorldResources(
             store.worldResources.filter(r => r.id !== payload.old.id)
           );
@@ -233,11 +232,6 @@ resourceChannel = supabase
         }
         case 'UPDATE': {
           const updatedResource = transformDatabaseResource(payload.new);
-          const oldResource = store.worldResources.find(r => r.id === updatedResource.id);
-          
-          if (oldResource && oldResource.currentHealth > updatedResource.currentHealth) {
-            store.addResources(updatedResource.valuePerClick);
-          }
           
           store.syncWorldResources(
             store.worldResources.map(r => 
@@ -368,7 +362,7 @@ const useGameStore = create<GameState>()(
         set((state) => {
           const newPosition = { x, y };
           if (state.user) {
-            debouncedSave(get());
+            debouncedSave({ ...state, worldPosition: newPosition });
           }
           return { worldPosition: newPosition };
         });
@@ -378,7 +372,7 @@ const useGameStore = create<GameState>()(
         set((state) => {
           const newResources = state.resources + amount;
           if (state.user) {
-            debouncedSave(get());
+            debouncedSave({ ...state, resources: newResources });
           }
           return { resources: newResources };
         });
@@ -392,11 +386,14 @@ const useGameStore = create<GameState>()(
       teleportToCastle: () => {
         const currentResources = get().resources;
         const teleportCost = Math.floor(currentResources * 0.5);
-        set({
+        const newState = {
           worldPosition: { x: 0, y: 0 },
           resources: currentResources - teleportCost
-        });
-        debouncedSave(get());
+        };
+        set(newState);
+        if (get().user) {
+          debouncedSave({ ...get(), ...newState });
+        }
       },
 
       buyPickaxe: () => set((state) => {
@@ -409,7 +406,7 @@ const useGameStore = create<GameState>()(
             }
           };
           if (state.user) {
-            debouncedSave(get());
+            debouncedSave({ ...state, ...newState });
           }
           return newState;
         }
@@ -493,17 +490,19 @@ const useGameStore = create<GameState>()(
 
           if (error) throw error;
 
-          set((state) => ({
-            resources: state.resources - RETRIEVE_COST,
-            inventory: {
-              ...state.inventory,
-              pickaxes: state.inventory.pickaxes + 1
+          set((state) => {
+            const newState = {
+              resources: state.resources - RETRIEVE_COST,
+              inventory: {
+                ...state.inventory,
+                pickaxes: state.inventory.pickaxes + 1
+              }
+            };
+            if (state.user) {
+              debouncedSave({ ...state, ...newState });
             }
-          }));
-          
-          if (get().user) {
-            debouncedSave(get());
-          }
+            return newState;
+          });
         } catch (error) {
           console.error('Error retrieving structure:', error);
         }
@@ -530,29 +529,104 @@ const useGameStore = create<GameState>()(
         try {
           const resourceId = cleanId(id, 'resource');
           const resource = get().worldResources.find(r => r.id === resourceId);
-          if (!resource) return;
+          const { user } = get();
+          
+          if (!resource || !user) return;
 
-          const newHealth = Math.max(0, resource.currentHealth - damage);
+          // Get the current state of the resource
+          const { data: currentResource, error: fetchError } = await supabase
+            .from('resources')
+            .select('current_health, gatherer_id')
+            .eq('id', resourceId)
+            .single();
+
+          if (fetchError) {
+            console.error('Error fetching resource:', fetchError);
+            return;
+          }
+
+          // Only allow damage if the resource is unclaimed or claimed by this user
+          if (currentResource.gatherer_id && currentResource.gatherer_id !== user.id) {
+            return;
+          }
+
+          // Try to claim the resource if it's unclaimed
+          if (!currentResource.gatherer_id) {
+            const { error: claimError } = await supabase
+              .from('resources')
+              .update({ 
+                gatherer_id: user.id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', resourceId)
+              .is('gatherer_id', null);
+
+            if (claimError) {
+              console.error('Error claiming resource:', claimError);
+              return;
+            }
+          }
+
+          const newHealth = Math.max(0, currentResource.current_health - damage);
 
           if (newHealth <= 0) {
+            // Resource is destroyed
             const { error: deleteError } = await supabase
               .from('resources')
               .delete()
-              .eq('id', resourceId);
+              .eq('id', resourceId)
+              .eq('gatherer_id', user.id); // Only delete if we own the claim
 
-            if (deleteError) throw deleteError;
+            if (deleteError) {
+              console.error('Error deleting resource:', deleteError);
+              return;
+            }
 
+            // Award resources only to the gatherer
+            set(state => ({
+              resources: state.resources + resource.valuePerClick
+            }));
+
+            // Spawn a new resource
             await spawnNewResource();
           } else {
+            // Update resource health
             const { error: updateError } = await supabase
               .from('resources')
-              .update({ current_health: newHealth })
-              .eq('id', resourceId);
+              .update({
+                current_health: newHealth,
+                gatherer_id: user.id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', resourceId)
+              .eq('gatherer_id', user.id); // Only update if we own the claim
 
-            if (updateError) throw updateError;
+            if (updateError) {
+              console.error('Error updating resource:', updateError);
+              return;
+            }
+
+            // Award resources only to the gatherer
+            set(state => ({
+              resources: state.resources + resource.valuePerClick
+            }));
+          }
+
+          // Release the claim after gathering
+          const { error: releaseError } = await supabase
+            .from('resources')
+            .update({ 
+              gatherer_id: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', resourceId)
+            .eq('gatherer_id', user.id);
+
+          if (releaseError) {
+            console.error('Error releasing resource claim:', releaseError);
           }
         } catch (error) {
-          console.error('Error damaging resource:', error);
+          console.error('Error in damageResource:', error);
           await get().loadWorldResources();
         }
       },
@@ -587,27 +661,28 @@ const useGameStore = create<GameState>()(
         if (!user) return;
 
         try {
-          const { data, error } = await supabase
+          const { data: progressRecords, error } = await supabase
             .from('user_progress')
             .select('*')
             .eq('user_id', user.id)
             .order('updated_at', { ascending: false })
-            .limit(1)
-            .single()
-            .throwOnError();
+            .limit(1);
 
-          if (error && error.code !== 'PGRST116') throw error;
+          if (error) throw error;
+
+          const latestProgress = progressRecords?.[0];
           
-          if (data) {
+          if (latestProgress) {
             set({
-              resources: data.resources,
+              resources: latestProgress.resources,
               worldPosition: {
-                x: data.position_x,
-                y: data.position_y
+                x: latestProgress.position_x,
+                y: latestProgress.position_y
               },
-              progressId: data.id
+              progressId: latestProgress.id
             });
           } else {
+            // Create new progress record for this user
             const { data: newProgress, error: insertError } = await supabase
               .from('user_progress')
               .insert({
@@ -617,13 +692,16 @@ const useGameStore = create<GameState>()(
                 position_y: 0
               })
               .select()
-              .single()
-              .throwOnError();
-            
+              .single();
+
             if (insertError) throw insertError;
-            
+
             if (newProgress) {
-              set({ progressId: newProgress.id });
+              set({ 
+                progressId: newProgress.id,
+                resources: 0,
+                worldPosition: { x: 0, y: 0 }
+              });
             }
           }
         } catch (error) {
@@ -636,19 +714,36 @@ const useGameStore = create<GameState>()(
         if (!user) return;
 
         try {
-          const { error } = await supabase
-            .from('user_progress')
-            .upsert({
-              id: progressId,
-              user_id: user.id,
-              resources,
-              position_x: worldPosition.x,
-              position_y: worldPosition.y,
-              updated_at: new Date().toISOString()
-            })
-            .throwOnError();
+          const progressData = {
+            user_id: user.id,
+            resources,
+            position_x: worldPosition.x,
+            position_y: worldPosition.y,
+            updated_at: new Date().toISOString()
+          };
 
-          if (error) throw error;
+          if (progressId) {
+            // Update existing progress
+            const { error } = await supabase
+              .from('user_progress')
+              .update(progressData)
+              .eq('id', progressId)
+              .eq('user_id', user.id);
+
+            if (error) throw error;
+          } else {
+            // Create new progress record
+            const { data: newProgress, error } = await supabase
+              .from('user_progress')
+              .insert(progressData)
+              .select()
+              .single();
+
+            if (error) throw error;
+            if (newProgress) {
+              set({ progressId: newProgress.id });
+            }
+          }
         } catch (error) {
           console.error('Error saving user progress:', error);
         }
@@ -665,6 +760,7 @@ const useGameStore = create<GameState>()(
   )
 );
 
+// Auth state change listener
 supabase.auth.onAuthStateChange((event, session) => {
   const store = useGameStore.getState();
   
@@ -676,6 +772,7 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
+// Clean up timeouts
 window.addEventListener('unload', () => {
   if (saveTimeout) {
     window.clearTimeout(saveTimeout);

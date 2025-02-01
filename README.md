@@ -44,120 +44,174 @@ Cursor Clicker MMO is a multiplayer online game where players gather resources, 
 - Resource counter
 - Draggable leaderboard showing top players
 - Inventory system for structures
-- Persistent player settings
+- Persistent player settings and progress
 
-#### ⚙️ Settings
-- Customizable username
-- Cursor style selection
-- AFK timeout configuration
-- Settings persist between sessions
+### 🔒 Resource Gathering System
 
-### 🛠️ Technical Features
+The game implements a robust resource gathering system with the following features:
 
-#### Real-time Multiplayer Architecture
+1. **Resource Claiming**
+   - Resources must be claimed before gathering
+   - Only one player can gather a resource at a time
+   - Claims automatically expire after 5 seconds
+   - Prevents multiple players from gathering the same resource
 
-##### Client-Server Communication
-1. **Resource Gathering**
-   - Client sends damage request to server
-   - Server processes damage and broadcasts changes
-   - Resources are only awarded when server confirms the action
-   - Prevents client-side manipulation and cheating
+2. **Gathering Logic**
+   ```typescript
+   // Resource gathering with claim system
+   const damageResource = async (resourceId: string, damage: number) => {
+     try {
+       // Check if resource is available
+       const { data: resource } = await supabase
+         .from('resources')
+         .select('current_health, gatherer_id')
+         .eq('id', resourceId)
+         .single();
 
-2. **Structure Management**
-   - Structure placement/updates go through server validation
-   - Position updates use optimistic UI with server confirmation
-   - Health changes are server-authoritative
+       // Only proceed if unclaimed or claimed by this user
+       if (resource.gatherer_id && resource.gatherer_id !== userId) {
+         return;
+       }
 
-3. **Cursor Position Broadcasting**
-   - Uses Supabase Realtime channels
-   - Throttled updates (50ms interval)
-   - Interpolated movement for smooth visuals
-   - Automatic AFK detection
+       // Try to claim the resource
+       await supabase
+         .from('resources')
+         .update({ 
+           gatherer_id: userId,
+           updated_at: new Date()
+         })
+         .eq('id', resourceId)
+         .is('gatherer_id', null);
 
-##### State Management
-1. **Server State**
-   - Supabase handles all persistent data
-   - Row Level Security (RLS) enforces access control
-   - Real-time subscriptions maintain consistency
+       // Update resource health
+       const newHealth = Math.max(0, resource.current_health - damage);
+       await supabase
+         .from('resources')
+         .update({ current_health: newHealth })
+         .eq('id', resourceId)
+         .eq('gatherer_id', userId);
 
-2. **Client State**
-   - Zustand manages local state
-   - Persistent settings using localStorage
-   - Optimistic updates for responsive UI
-   - State reconciliation on server events
+       // Release claim after gathering
+       await supabase
+         .from('resources')
+         .update({ gatherer_id: null })
+         .eq('id', resourceId)
+         .eq('gatherer_id', userId);
+     } catch (error) {
+       console.error('Error gathering resource:', error);
+     }
+   };
+   ```
 
-##### Security Measures
-1. **Resource Collection**
-   - Server validates all resource changes
-   - Resources awarded only on server confirmation
-   - Prevents client-side point manipulation
-   - Rate limiting on server actions
+3. **Database Schema**
+   ```sql
+   -- Resources table with gathering system
+   CREATE TABLE resources (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     type text NOT NULL,
+     rarity text NOT NULL,
+     current_health int NOT NULL,
+     max_health int NOT NULL,
+     value_per_click int NOT NULL,
+     gatherer_id uuid REFERENCES auth.users(id),
+     updated_at timestamptz DEFAULT now()
+   );
 
-2. **Structure Ownership**
-   - RLS policies enforce ownership rules
-   - Only owners can modify structures
-   - Public read access for all players
+   -- Automatically release stale claims
+   CREATE FUNCTION release_stale_claims()
+   RETURNS TRIGGER AS $$
+   BEGIN
+     UPDATE resources
+     SET gatherer_id = NULL
+     WHERE gatherer_id IS NOT NULL
+     AND updated_at < NOW() - INTERVAL '5 seconds';
+     RETURN NEW;
+   END;
+   $$ LANGUAGE plpgsql;
 
-3. **Anti-Cheat**
-   - Server-side validation for all actions
-   - No client-side resource calculations
-   - Position validation for structure placement
-   - Rate limiting on critical actions
+   -- Trigger to clean up stale claims
+   CREATE TRIGGER auto_release_claims
+     AFTER UPDATE ON resources
+     FOR EACH STATEMENT
+     EXECUTE FUNCTION release_stale_claims();
+   ```
 
-##### Real-time Updates
-1. **Supabase Channels**
-   - Broadcast changes to all connected clients
-   - Handle cursor position updates
-   - Manage resource state changes
-   - Sync structure modifications
+4. **Row Level Security**
+   ```sql
+   -- Resource access policies
+   CREATE POLICY "Anyone can read resources"
+     ON resources FOR SELECT
+     TO public USING (true);
 
-2. **State Synchronization**
-   - Immediate local updates for responsiveness
-   - Server confirmation for state changes
-   - Automatic conflict resolution
-   - Graceful error handling
+   CREATE POLICY "Users can claim and update resources"
+     ON resources FOR UPDATE
+     TO authenticated
+     USING (
+       gatherer_id IS NULL OR 
+       gatherer_id = auth.uid()
+     )
+     WITH CHECK (
+       (gatherer_id IS NULL AND NEW.gatherer_id = auth.uid()) OR
+       (gatherer_id = auth.uid() AND NEW.gatherer_id = auth.uid()) OR
+       (gatherer_id = auth.uid() AND NEW.gatherer_id IS NULL)
+     );
+   ```
 
-3. **Performance Optimizations**
-   - Throttled position updates
-   - Batched state updates
-   - Efficient change detection
-   - Minimal network payload
+### 🔐 Progress Persistence
+
+The game implements robust progress persistence with the following features:
+
+1. **State Management**
+   - Automatic saving of player position
+   - Resource count persistence
+   - Debounced save operations to prevent API spam
+   - Proper error handling and recovery
+
+2. **Data Synchronization**
+   - Real-time position updates
+   - Resource count synchronization
+   - Automatic state recovery on page refresh
+   - Conflict resolution for concurrent updates
+
+3. **Technical Implementation**
+   ```typescript
+   // Example of state persistence with proper error handling
+   const saveProgress = async () => {
+     try {
+       await supabase
+         .from('user_progress')
+         .upsert({
+           user_id: userId,
+           resources: currentResources,
+           position_x: worldPosition.x,
+           position_y: worldPosition.y
+         })
+         .throwOnError();
+     } catch (error) {
+       console.error('Error saving progress:', error);
+     }
+   };
+   ```
 
 ### 🚀 Deployment
 
-The game is successfully deployed on Netlify. Here are the key deployment details and solutions to common issues:
+The game is deployed on Netlify with the following configuration:
 
-#### Database Setup
-1. **User Progress Table**
-   - Unique constraint on user_id field
-   - Automatic creation of new progress records
-   - Proper error handling for concurrent updates
+1. **Build Settings**
+   - Framework: Vite
+   - Build Command: `npm run build`
+   - Publish Directory: `dist`
+   - Node Version: 18.x
 
-#### Authentication Flow
-1. **Sign In Process**
-   - Google OAuth integration
-   - Automatic user progress creation
-   - Session persistence
+2. **Environment Variables**
+   - VITE_SUPABASE_URL
+   - VITE_SUPABASE_ANON_KEY
 
-#### Common Issues & Solutions
-
-1. **User Progress Conflicts**
-   ```sql
-   -- Solution: Add unique constraint on user_id
-   ALTER TABLE user_progress 
-   ADD CONSTRAINT user_progress_user_id_key 
-   UNIQUE (user_id);
-   ```
-
-2. **Progress Loading Errors**
-   - Added `.throwOnError()` to Supabase queries
-   - Proper error handling for non-existent records
-   - Automatic progress creation for new users
-
-3. **Progress Saving Issues**
-   - Removed `onConflict` specification
-   - Using `upsert` with proper constraints
-   - Debounced save operations
+3. **Database Configuration**
+   - Supabase real-time subscriptions
+   - Row Level Security (RLS) policies
+   - Structured database schema
+   - Optimistic updates for better UX
 
 ### 🔧 Technical Stack
 - React + Vite
