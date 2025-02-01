@@ -14,6 +14,8 @@ interface GameState {
   structures: Structure[];
   worldResources: WorldResource[];
   afkTimeout: number;
+  user: any | null;
+  progressId: string | null;
   setWorldPosition: (x: number, y: number) => void;
   addResources: (amount: number) => void;
   addCamp: (camp: Camp) => void;
@@ -32,6 +34,9 @@ interface GameState {
   loadWorldResources: () => Promise<void>;
   damageResource: (id: string, damage: number) => Promise<void>;
   syncWorldResources: (resources: WorldResource[]) => void;
+  setUser: (user: any | null) => void;
+  loadUserProgress: () => Promise<void>;
+  saveUserProgress: () => Promise<void>;
 }
 
 interface Camp {
@@ -74,6 +79,7 @@ let isSpawning = false;
 let resourceChannel: any = null;
 let structureChannel: any = null;
 let balanceInterval: number | null = null;
+let saveTimeout: number | null = null;
 
 const cleanId = (id: string, prefix: string) => id.replace(`${prefix}-`, '');
 
@@ -216,6 +222,10 @@ resourceChannel = supabase
       
       switch (payload.eventType) {
         case 'DELETE': {
+          const resource = store.worldResources.find(r => r.id === payload.old.id);
+          if (resource) {
+            store.addResources(resource.valuePerClick);
+          }
           store.syncWorldResources(
             store.worldResources.filter(r => r.id !== payload.old.id)
           );
@@ -223,6 +233,12 @@ resourceChannel = supabase
         }
         case 'UPDATE': {
           const updatedResource = transformDatabaseResource(payload.new);
+          const oldResource = store.worldResources.find(r => r.id === updatedResource.id);
+          
+          if (oldResource && oldResource.currentHealth > updatedResource.currentHealth) {
+            store.addResources(updatedResource.valuePerClick);
+          }
+          
           store.syncWorldResources(
             store.worldResources.map(r => 
               r.id === updatedResource.id ? updatedResource : r
@@ -282,6 +298,17 @@ structureChannel = supabase
   )
   .subscribe();
 
+const debouncedSave = (store: GameState) => {
+  if (saveTimeout) {
+    window.clearTimeout(saveTimeout);
+  }
+  
+  saveTimeout = window.setTimeout(() => {
+    store.saveUserProgress();
+    saveTimeout = null;
+  }, 1000);
+};
+
 const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
@@ -296,6 +323,8 @@ const useGameStore = create<GameState>()(
       structures: [],
       worldResources: [],
       afkTimeout: DEFAULT_AFK_TIMEOUT,
+      user: null,
+      progressId: null,
 
       loadStructures: async () => {
         try {
@@ -335,8 +364,26 @@ const useGameStore = create<GameState>()(
         }
       },
 
-      setWorldPosition: (x, y) => set({ worldPosition: { x, y } }),
-      addResources: (amount) => set((state) => ({ resources: state.resources + amount })),
+      setWorldPosition: (x, y) => {
+        set((state) => {
+          const newPosition = { x, y };
+          if (state.user) {
+            debouncedSave(get());
+          }
+          return { worldPosition: newPosition };
+        });
+      },
+      
+      addResources: (amount) => {
+        set((state) => {
+          const newResources = state.resources + amount;
+          if (state.user) {
+            debouncedSave(get());
+          }
+          return { resources: newResources };
+        });
+      },
+      
       addCamp: (camp) => set((state) => ({ camps: [...state.camps, camp] })),
       setUsername: (name) => set({ username: name }),
       setCursorEmoji: (emoji) => set({ cursorEmoji: emoji }),
@@ -349,17 +396,22 @@ const useGameStore = create<GameState>()(
           worldPosition: { x: 0, y: 0 },
           resources: currentResources - teleportCost
         });
+        debouncedSave(get());
       },
 
       buyPickaxe: () => set((state) => {
         if (state.resources >= PICKAXE_COST) {
-          return {
+          const newState = {
             resources: state.resources - PICKAXE_COST,
             inventory: {
               ...state.inventory,
               pickaxes: state.inventory.pickaxes + 1
             }
           };
+          if (state.user) {
+            debouncedSave(get());
+          }
+          return newState;
         }
         return state;
       }),
@@ -387,6 +439,10 @@ const useGameStore = create<GameState>()(
               pickaxes: state.inventory.pickaxes - 1
             }
           }));
+          
+          if (get().user) {
+            debouncedSave(get());
+          }
         } catch (error) {
           console.error('Error placing structure:', error);
         }
@@ -444,6 +500,10 @@ const useGameStore = create<GameState>()(
               pickaxes: state.inventory.pickaxes + 1
             }
           }));
+          
+          if (get().user) {
+            debouncedSave(get());
+          }
         } catch (error) {
           console.error('Error retrieving structure:', error);
         }
@@ -473,11 +533,6 @@ const useGameStore = create<GameState>()(
           if (!resource) return;
 
           const newHealth = Math.max(0, resource.currentHealth - damage);
-
-          // Add resources immediately
-          set((state) => ({
-            resources: state.resources + resource.valuePerClick
-          }));
 
           if (newHealth <= 0) {
             const { error: deleteError } = await supabase
@@ -514,12 +569,117 @@ const useGameStore = create<GameState>()(
           new Map(resources.map(r => [r.id, r])).values()
         );
         set({ worldResources: uniqueResources });
+      },
+
+      setUser: (user) => {
+        set({ user });
+        if (!user) {
+          set({
+            resources: 0,
+            worldPosition: { x: 0, y: 0 },
+            progressId: null
+          });
+        }
+      },
+
+      loadUserProgress: async () => {
+        const { user } = get();
+        if (!user) return;
+
+        try {
+          const { data, error } = await supabase
+            .from('user_progress')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .single()
+            .throwOnError();
+
+          if (error && error.code !== 'PGRST116') throw error;
+          
+          if (data) {
+            set({
+              resources: data.resources,
+              worldPosition: {
+                x: data.position_x,
+                y: data.position_y
+              },
+              progressId: data.id
+            });
+          } else {
+            const { data: newProgress, error: insertError } = await supabase
+              .from('user_progress')
+              .insert({
+                user_id: user.id,
+                resources: 0,
+                position_x: 0,
+                position_y: 0
+              })
+              .select()
+              .single()
+              .throwOnError();
+            
+            if (insertError) throw insertError;
+            
+            if (newProgress) {
+              set({ progressId: newProgress.id });
+            }
+          }
+        } catch (error) {
+          console.error('Error loading user progress:', error);
+        }
+      },
+
+      saveUserProgress: async () => {
+        const { user, resources, worldPosition, progressId } = get();
+        if (!user) return;
+
+        try {
+          const { error } = await supabase
+            .from('user_progress')
+            .upsert({
+              id: progressId,
+              user_id: user.id,
+              resources,
+              position_x: worldPosition.x,
+              position_y: worldPosition.y,
+              updated_at: new Date().toISOString()
+            })
+            .throwOnError();
+
+          if (error) throw error;
+        } catch (error) {
+          console.error('Error saving user progress:', error);
+        }
       }
     }),
     {
       name: 'game-storage',
+      partialize: (state) => ({
+        username: state.username,
+        cursorEmoji: state.cursorEmoji,
+        afkTimeout: state.afkTimeout
+      })
     }
   )
 );
+
+supabase.auth.onAuthStateChange((event, session) => {
+  const store = useGameStore.getState();
+  
+  if (event === 'SIGNED_IN') {
+    store.setUser(session?.user ?? null);
+    store.loadUserProgress();
+  } else if (event === 'SIGNED_OUT') {
+    store.setUser(null);
+  }
+});
+
+window.addEventListener('unload', () => {
+  if (saveTimeout) {
+    window.clearTimeout(saveTimeout);
+  }
+});
 
 export { useGameStore };

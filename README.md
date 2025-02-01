@@ -54,81 +54,112 @@ Cursor Clicker MMO is a multiplayer online game where players gather resources, 
 
 ### 🛠️ Technical Features
 
-#### Real-time Multiplayer
-- Cursor position broadcasting
-- Structure state synchronization
-- Resource state synchronization
-- AFK detection system
+#### Real-time Multiplayer Architecture
 
-#### Database Integration
-- Supabase real-time subscriptions
-- Row Level Security (RLS) policies
-- Structured database schema
-- Optimistic updates for better UX
+##### Client-Server Communication
+1. **Resource Gathering**
+   - Client sends damage request to server
+   - Server processes damage and broadcasts changes
+   - Resources are only awarded when server confirms the action
+   - Prevents client-side manipulation and cheating
 
-#### Performance
-- Efficient state management with Zustand
-- Optimized rendering with React
-- Debounced network updates
-- Interpolated cursor movement
+2. **Structure Management**
+   - Structure placement/updates go through server validation
+   - Position updates use optimistic UI with server confirmation
+   - Health changes are server-authoritative
 
-### 🎯 Game Mechanics
+3. **Cursor Position Broadcasting**
+   - Uses Supabase Realtime channels
+   - Throttled updates (50ms interval)
+   - Interpolated movement for smooth visuals
+   - Automatic AFK detection
 
-#### Resource Gathering
-1. Click on resources to gather them
-2. Each resource type has different:
-   - Health points
-   - Value per click
-   - Rarity (affects spawn rate)
-   - Visual appearance
+##### State Management
+1. **Server State**
+   - Supabase handles all persistent data
+   - Row Level Security (RLS) enforces access control
+   - Real-time subscriptions maintain consistency
 
-#### Structure Management
-1. Purchase pickaxes from the shop (100 resources)
-2. Place structures in the world
-3. Structures automatically gather resources
-4. Protect your structures from other players
-5. Drag structures to reposition them
+2. **Client State**
+   - Zustand manages local state
+   - Persistent settings using localStorage
+   - Optimistic updates for responsive UI
+   - State reconciliation on server events
 
-#### Economy
-- Resources are the main currency
-- Structures cost 100 resources
-- Teleporting costs 50% of current resources
-- Structure retrieval costs 50 resources
+##### Security Measures
+1. **Resource Collection**
+   - Server validates all resource changes
+   - Resources awarded only on server confirmation
+   - Prevents client-side point manipulation
+   - Rate limiting on server actions
 
-### 🎨 Visual Elements
-- Rarity-based color coding
-- Health bars for resources and structures
-- Animated pickaxes
-- Custom cursor emojis
-- Resource tooltips
-- Player labels with resource counts
+2. **Structure Ownership**
+   - RLS policies enforce ownership rules
+   - Only owners can modify structures
+   - Public read access for all players
 
-### 🔒 Security Features
-- Row Level Security for database access
-- Structure ownership verification
-- Anti-cheat measures for resource gathering
-- Protected structure manipulation
+3. **Anti-Cheat**
+   - Server-side validation for all actions
+   - No client-side resource calculations
+   - Position validation for structure placement
+   - Rate limiting on critical actions
 
-### 🎛️ Controls
-- WASD: Move around the world
-- Left Click: Gather resources/Damage structures
-- Right Click: Structure context menu
-- Drag: Move structures (if owned)
-- ESC: Close modals
+##### Real-time Updates
+1. **Supabase Channels**
+   - Broadcast changes to all connected clients
+   - Handle cursor position updates
+   - Manage resource state changes
+   - Sync structure modifications
 
-## 🚀 Future Possibilities
-- Additional resource types
-- More structure varieties
-- Player achievements
-- Trading system
-- Clan/Guild system
-- PvP zones
-- Resource processing/crafting
-- Player skills/progression
-- Daily quests/missions
-- Special events
+2. **State Synchronization**
+   - Immediate local updates for responsiveness
+   - Server confirmation for state changes
+   - Automatic conflict resolution
+   - Graceful error handling
 
-## 🔧 Technical Stack
+3. **Performance Optimizations**
+   - Throttled position updates
+   - Batched state updates
+   - Efficient change detection
+   - Minimal network payload
+
+### 🚀 Deployment
+
+The game is successfully deployed on Netlify. Here are the key deployment details and solutions to common issues:
+
+#### Database Setup
+1. **User Progress Table**
+   - Unique constraint on user_id field
+   - Automatic creation of new progress records
+   - Proper error handling for concurrent updates
+
+#### Authentication Flow
+1. **Sign In Process**
+   - Google OAuth integration
+   - Automatic user progress creation
+   - Session persistence
+
+#### Common Issues & Solutions
+
+1. **User Progress Conflicts**
+   ```sql
+   -- Solution: Add unique constraint on user_id
+   ALTER TABLE user_progress 
+   ADD CONSTRAINT user_progress_user_id_key 
+   UNIQUE (user_id);
+   ```
+
+2. **Progress Loading Errors**
+   - Added `.throwOnError()` to Supabase queries
+   - Proper error handling for non-existent records
+   - Automatic progress creation for new users
+
+3. **Progress Saving Issues**
+   - Removed `onConflict` specification
+   - Using `upsert` with proper constraints
+   - Debounced save operations
+
+### 🔧 Technical Stack
 - React + Vite
 - TypeScript
 - Tailwind CSS
@@ -136,7 +167,7 @@ Cursor Clicker MMO is a multiplayer online game where players gather resources, 
 - Zustand (State Management)
 - Lucide React (Icons)
 
-## 🎯 Design Goals
+### 🎯 Design Goals
 1. Engaging multiplayer interaction
 2. Simple but deep gameplay mechanics
 3. Fair and balanced progression

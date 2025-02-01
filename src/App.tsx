@@ -1,6 +1,7 @@
 import React from 'react';
 import { World } from './components/World';
 import { useGameStore } from './store/gameStore';
+import { AuthButton } from './components/AuthButton';
 
 function App() {
   const resources = useGameStore((state) => state.resources);
@@ -12,6 +13,7 @@ function App() {
           <h1 className="text-2xl font-bold">Cursor Clicker MMO</h1>
           <div className="flex items-center gap-4">
             <span className="text-xl">💰 {resources}</span>
+            <AuthButton />
           </div>
         </div>
       </div>
