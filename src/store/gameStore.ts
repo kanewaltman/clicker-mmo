@@ -528,7 +528,10 @@ const useGameStore = create<GameState>()(
           const resourceId = cleanId(id, 'resource');
           const resource = get().worldResources.find(r => r.id === resourceId);
           
-          if (!resource) return;
+          if (!resource) {
+            await get().loadWorldResources();
+            return;
+          }
 
           // Get the current state of the resource
           const { data: currentResource, error: fetchError } = await supabase
@@ -545,7 +548,7 @@ const useGameStore = create<GameState>()(
           const newHealth = Math.max(0, currentResource.current_health - damage);
 
           if (newHealth <= 0) {
-            // Resource is depleted, delete it
+            // Delete the depleted resource
             const { error: deleteError } = await supabase
               .from('resources')
               .delete()
@@ -567,9 +570,7 @@ const useGameStore = create<GameState>()(
             // Update resource health
             const { error: updateError } = await supabase
               .from('resources')
-              .update({
-                current_health: newHealth
-              })
+              .update({ current_health: newHealth })
               .eq('id', resourceId);
 
             if (updateError) {
@@ -729,6 +730,4 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// Clean
-
-export { useGameStore }
+export { useGameStore };
