@@ -358,19 +358,8 @@ const useGameStore = create<GameState>()(
       setWorldPosition: (x, y) => {
         set((state) => {
           const newPosition = { x, y };
-          if (state.user) {
-            debouncedSave({ ...state, worldPosition: newPosition });
-          }
-          return { worldPosition: newPosition };
-        });
-      },
-      
-      addResources: (amount) => {
-        set((state) => {
-          const newResources = state.resources + amount;
-          const newState = { resources: newResources };
+          const newState = { worldPosition: newPosition };
           
-          // Always save when resources change if user is logged in
           if (state.user) {
             debouncedSave({ ...state, ...newState });
           }
@@ -379,6 +368,19 @@ const useGameStore = create<GameState>()(
         });
       },
       
+      addResources: (amount) => {
+        set((state) => {
+          const newResources = state.resources + amount;
+          const newState = { resources: newResources };
+          
+          if (state.user) {
+            debouncedSave({ ...state, ...newState });
+          }
+          
+          return newState;
+        });
+      },
+
       addCamp: (camp) => set((state) => ({ camps: [...state.camps, camp] })),
       setUsername: (name) => set({ username: name }),
       setCursorEmoji: (emoji) => set({ cursorEmoji: emoji }),
@@ -387,14 +389,16 @@ const useGameStore = create<GameState>()(
       teleportToCastle: () => {
         const currentResources = get().resources;
         const teleportCost = Math.floor(currentResources * 0.5);
-        const newState = {
-          worldPosition: { x: 0, y: 0 },
-          resources: currentResources - teleportCost
-        };
-        set(newState);
-        if (get().user) {
-          debouncedSave({ ...get(), ...newState });
-        }
+        set((state) => {
+          const newState = {
+            worldPosition: { x: 0, y: 0 },
+            resources: currentResources - teleportCost
+          };
+          if (state.user) {
+            debouncedSave({ ...state, ...newState });
+          }
+          return newState;
+        });
       },
 
       buyPickaxe: () => set((state) => {
@@ -538,7 +542,6 @@ const useGameStore = create<GameState>()(
             return;
           }
 
-          // Get the current state of the resource
           const { data: currentResource, error: fetchError } = await supabase
             .from('resources')
             .select('current_health, value_per_click')
@@ -553,7 +556,6 @@ const useGameStore = create<GameState>()(
           const newHealth = Math.max(0, currentResource.current_health - damage);
 
           if (newHealth <= 0) {
-            // Delete the depleted resource
             const { error: deleteError } = await supabase
               .from('resources')
               .delete()
@@ -564,7 +566,6 @@ const useGameStore = create<GameState>()(
               return;
             }
 
-            // Award resources
             set(state => {
               const newState = {
                 resources: state.resources + currentResource.value_per_click
@@ -575,10 +576,8 @@ const useGameStore = create<GameState>()(
               return newState;
             });
 
-            // Spawn a new resource
             await spawnNewResource();
           } else {
-            // Update resource health
             const { error: updateError } = await supabase
               .from('resources')
               .update({ current_health: newHealth })
@@ -589,7 +588,6 @@ const useGameStore = create<GameState>()(
               return;
             }
 
-            // Award resources
             set(state => {
               const newState = {
                 resources: state.resources + currentResource.value_per_click
@@ -657,7 +655,6 @@ const useGameStore = create<GameState>()(
               progressId: latestProgress.id
             });
           } else {
-            // Create new progress record for this user
             const { data: newProgress, error: insertError } = await supabase
               .from('user_progress')
               .insert({
@@ -698,7 +695,6 @@ const useGameStore = create<GameState>()(
           };
 
           if (progressId) {
-            // Update existing progress
             const { error } = await supabase
               .from('user_progress')
               .update(progressData)
@@ -707,7 +703,6 @@ const useGameStore = create<GameState>()(
 
             if (error) throw error;
           } else {
-            // Create new progress record
             const { data: newProgress, error } = await supabase
               .from('user_progress')
               .insert(progressData)
@@ -735,7 +730,6 @@ const useGameStore = create<GameState>()(
   )
 );
 
-// Auth state change listener
 supabase.auth.onAuthStateChange((event, session) => {
   const store = useGameStore.getState();
   
