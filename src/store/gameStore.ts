@@ -223,8 +223,6 @@ resourceChannel = supabase
       
       switch (payload.eventType) {
         case 'DELETE': {
-          // Only sync the world resources, don't give rewards here
-          // as rewards are now handled in damageResource
           store.syncWorldResources(
             store.worldResources.filter(r => r.id !== payload.old.id)
           );
@@ -529,14 +527,13 @@ const useGameStore = create<GameState>()(
         try {
           const resourceId = cleanId(id, 'resource');
           const resource = get().worldResources.find(r => r.id === resourceId);
-          const { user } = get();
           
-          if (!resource || !user) return;
+          if (!resource) return;
 
           // Get the current state of the resource
           const { data: currentResource, error: fetchError } = await supabase
             .from('resources')
-            .select('current_health, gatherer_id')
+            .select('current_health, value_per_click')
             .eq('id', resourceId)
             .single();
 
@@ -545,46 +542,23 @@ const useGameStore = create<GameState>()(
             return;
           }
 
-          // Only allow damage if the resource is unclaimed or claimed by this user
-          if (currentResource.gatherer_id && currentResource.gatherer_id !== user.id) {
-            return;
-          }
-
-          // Try to claim the resource if it's unclaimed
-          if (!currentResource.gatherer_id) {
-            const { error: claimError } = await supabase
-              .from('resources')
-              .update({ 
-                gatherer_id: user.id,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', resourceId)
-              .is('gatherer_id', null);
-
-            if (claimError) {
-              console.error('Error claiming resource:', claimError);
-              return;
-            }
-          }
-
           const newHealth = Math.max(0, currentResource.current_health - damage);
 
           if (newHealth <= 0) {
-            // Resource is destroyed
+            // Resource is depleted, delete it
             const { error: deleteError } = await supabase
               .from('resources')
               .delete()
-              .eq('id', resourceId)
-              .eq('gatherer_id', user.id); // Only delete if we own the claim
+              .eq('id', resourceId);
 
             if (deleteError) {
               console.error('Error deleting resource:', deleteError);
               return;
             }
 
-            // Award resources only to the gatherer
+            // Award resources
             set(state => ({
-              resources: state.resources + resource.valuePerClick
+              resources: state.resources + currentResource.value_per_click
             }));
 
             // Spawn a new resource
@@ -594,36 +568,19 @@ const useGameStore = create<GameState>()(
             const { error: updateError } = await supabase
               .from('resources')
               .update({
-                current_health: newHealth,
-                gatherer_id: user.id,
-                updated_at: new Date().toISOString()
+                current_health: newHealth
               })
-              .eq('id', resourceId)
-              .eq('gatherer_id', user.id); // Only update if we own the claim
+              .eq('id', resourceId);
 
             if (updateError) {
               console.error('Error updating resource:', updateError);
               return;
             }
 
-            // Award resources only to the gatherer
+            // Award resources
             set(state => ({
-              resources: state.resources + resource.valuePerClick
+              resources: state.resources + currentResource.value_per_click
             }));
-          }
-
-          // Release the claim after gathering
-          const { error: releaseError } = await supabase
-            .from('resources')
-            .update({ 
-              gatherer_id: null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', resourceId)
-            .eq('gatherer_id', user.id);
-
-          if (releaseError) {
-            console.error('Error releasing resource claim:', releaseError);
           }
         } catch (error) {
           console.error('Error in damageResource:', error);
