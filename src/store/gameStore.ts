@@ -219,7 +219,6 @@ resourceChannel = supabase
     },
     async (payload) => {
       const store = useGameStore.getState();
-      const { user } = store;
       
       switch (payload.eventType) {
         case 'DELETE': {
@@ -369,10 +368,14 @@ const useGameStore = create<GameState>()(
       addResources: (amount) => {
         set((state) => {
           const newResources = state.resources + amount;
+          const newState = { resources: newResources };
+          
+          // Always save when resources change if user is logged in
           if (state.user) {
-            debouncedSave({ ...state, resources: newResources });
+            debouncedSave({ ...state, ...newState });
           }
-          return { resources: newResources };
+          
+          return newState;
         });
       },
       
@@ -428,16 +431,18 @@ const useGameStore = create<GameState>()(
 
           if (error) throw error;
 
-          set((state) => ({
-            inventory: {
-              ...state.inventory,
-              pickaxes: state.inventory.pickaxes - 1
+          set((state) => {
+            const newState = {
+              inventory: {
+                ...state.inventory,
+                pickaxes: state.inventory.pickaxes - 1
+              }
+            };
+            if (state.user) {
+              debouncedSave({ ...state, ...newState });
             }
-          }));
-          
-          if (get().user) {
-            debouncedSave(get());
-          }
+            return newState;
+          });
         } catch (error) {
           console.error('Error placing structure:', error);
         }
@@ -560,9 +565,15 @@ const useGameStore = create<GameState>()(
             }
 
             // Award resources
-            set(state => ({
-              resources: state.resources + currentResource.value_per_click
-            }));
+            set(state => {
+              const newState = {
+                resources: state.resources + currentResource.value_per_click
+              };
+              if (state.user) {
+                debouncedSave({ ...state, ...newState });
+              }
+              return newState;
+            });
 
             // Spawn a new resource
             await spawnNewResource();
@@ -579,9 +590,15 @@ const useGameStore = create<GameState>()(
             }
 
             // Award resources
-            set(state => ({
-              resources: state.resources + currentResource.value_per_click
-            }));
+            set(state => {
+              const newState = {
+                resources: state.resources + currentResource.value_per_click
+              };
+              if (state.user) {
+                debouncedSave({ ...state, ...newState });
+              }
+              return newState;
+            });
           }
         } catch (error) {
           console.error('Error in damageResource:', error);
