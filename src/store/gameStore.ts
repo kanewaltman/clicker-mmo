@@ -729,11 +729,6 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// Clean up timeouts
-window.addEventListener('unload', () => {
-  if (saveTimeout) {
-    window.clearTimeout(saveTimeout);
-  }
-});
+// Clean
 
-export { useGameStore };
+export { useGameStore }
