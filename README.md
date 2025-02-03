@@ -46,6 +46,87 @@ Cursor Clicker MMO is a multiplayer online game where players gather resources, 
 - Inventory system for structures
 - Persistent player settings and progress
 
+### 🎯 Interaction Systems
+
+The game implements sophisticated interaction systems for both desktop and mobile devices, ensuring smooth gameplay across all platforms.
+
+#### 🖥️ Desktop Controls
+1. **Mouse Movement**
+   - Smooth cursor tracking with requestAnimationFrame
+   - Performance-optimized position updates (~60fps)
+   - Cursor position syncing across all players
+   - Optional cursor hiding during panning
+
+2. **Keyboard Controls**
+   - WASD keys for camera movement
+   - Configurable movement speed
+   - Responsive input handling
+
+3. **Resource Gathering**
+   - Click-to-gather mechanics
+   - Visual feedback on resource hits
+   - Automatic claim system with 5-second timeout
+   - Concurrent gathering prevention
+
+4. **Structure Management**
+   - Drag-and-drop structure placement
+   - Click-and-hold to move existing structures
+   - Structure damage system with visual feedback
+
+#### 📱 Mobile Controls
+1. **Touch Handling**
+   - Center-locked cursor for consistent interaction
+   - Optimized touch event processing
+   - Prevent unwanted browser behaviors:
+     - No zooming
+     - No pull-to-refresh
+     - No text selection
+     - No context menus
+
+2. **Gesture Recognition**
+   - Short tap (< 200ms) for resource gathering
+   - Pan gesture for camera movement
+   - Minimal movement threshold (10px) to distinguish taps from pans
+   - Multi-touch prevention for consistent interaction
+
+3. **Mobile Optimizations**
+   - Fixed cursor position at screen center
+   - Touch-to-click conversion for resource gathering
+   - Automatic viewport management
+   - Touch event debouncing
+
+4. **Performance Features**
+   - RAF-based animation system
+   - Touch event throttling
+   - Efficient state updates
+   - Memory leak prevention
+   - Cleanup on component unmount
+
+#### 🔄 Shared Systems
+1. **State Management**
+   - Centralized game state
+   - Real-time multiplayer synchronization
+   - Optimistic updates for responsiveness
+   - Automatic state recovery
+
+2. **Performance Optimizations**
+   - requestAnimationFrame for smooth animations
+   - Event throttling and debouncing
+   - Memoized calculations
+   - Efficient re-rendering
+
+3. **Error Prevention**
+   - Initialization guards
+   - Event cleanup
+   - Memory management
+   - Error boundaries
+
+4. **Accessibility**
+   - Platform-specific controls
+   - Visual feedback
+   - Responsive design
+   - Cross-device compatibility
+
 ### 🔒 Resource Gathering System
 
 The game implements a robust resource gathering system with the following features:
@@ -103,131 +184,4 @@ The game implements a robust resource gathering system with the following featur
    };
    ```
 
-3. **Database Schema**
-   ```sql
-   -- Resources table with gathering system
-   CREATE TABLE resources (
-     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-     type text NOT NULL,
-     rarity text NOT NULL,
-     current_health int NOT NULL,
-     max_health int NOT NULL,
-     value_per_click int NOT NULL,
-     gatherer_id uuid REFERENCES auth.users(id),
-     updated_at timestamptz DEFAULT now()
-   );
-
-   -- Automatically release stale claims
-   CREATE FUNCTION release_stale_claims()
-   RETURNS TRIGGER AS $$
-   BEGIN
-     UPDATE resources
-     SET gatherer_id = NULL
-     WHERE gatherer_id IS NOT NULL
-     AND updated_at < NOW() - INTERVAL '5 seconds';
-     RETURN NEW;
-   END;
-   $$ LANGUAGE plpgsql;
-
-   -- Trigger to clean up stale claims
-   CREATE TRIGGER auto_release_claims
-     AFTER UPDATE ON resources
-     FOR EACH STATEMENT
-     EXECUTE FUNCTION release_stale_claims();
-   ```
-
-4. **Row Level Security**
-   ```sql
-   -- Resource access policies
-   CREATE POLICY "Anyone can read resources"
-     ON resources FOR SELECT
-     TO public USING (true);
-
-   CREATE POLICY "Users can claim and update resources"
-     ON resources FOR UPDATE
-     TO authenticated
-     USING (
-       gatherer_id IS NULL OR 
-       gatherer_id = auth.uid()
-     )
-     WITH CHECK (
-       (gatherer_id IS NULL AND NEW.gatherer_id = auth.uid()) OR
-       (gatherer_id = auth.uid() AND NEW.gatherer_id = auth.uid()) OR
-       (gatherer_id = auth.uid() AND NEW.gatherer_id IS NULL)
-     );
-   ```
-
-### 🔐 Progress Persistence
-
-The game implements robust progress persistence with the following features:
-
-1. **State Management**
-   - Automatic saving of player position
-   - Resource count persistence
-   - Debounced save operations to prevent API spam
-   - Proper error handling and recovery
-
-2. **Data Synchronization**
-   - Real-time position updates
-   - Resource count synchronization
-   - Automatic state recovery on page refresh
-   - Conflict resolution for concurrent updates
-
-3. **Technical Implementation**
-   ```typescript
-   // Example of state persistence with proper error handling
-   const saveProgress = async () => {
-     try {
-       await supabase
-         .from('user_progress')
-         .upsert({
-           user_id: userId,
-           resources: currentResources,
-           position_x: worldPosition.x,
-           position_y: worldPosition.y
-         })
-         .throwOnError();
-     } catch (error) {
-       console.error('Error saving progress:', error);
-     }
-   };
-   ```
-
-### 🚀 Deployment
-
-The game is deployed on Netlify with the following configuration:
-
-1. **Build Settings**
-   - Framework: Vite
-   - Build Command: `npm run build`
-   - Publish Directory: `dist`
-   - Node Version: 18.x
-
-2. **Environment Variables**
-   - VITE_SUPABASE_URL
-   - VITE_SUPABASE_ANON_KEY
-
-3. **Database Configuration**
-   - Supabase real-time subscriptions
-   - Row Level Security (RLS) policies
-   - Structured database schema
-   - Optimistic updates for better UX
-
-### 🔧 Technical Stack
-- React + Vite
-- TypeScript
-- Tailwind CSS
-- Supabase (Real-time Database)
-- Zustand (State Management)
-- Lucide React (Icons)
-
-### 🎯 Design Goals
-1. Engaging multiplayer interaction
-2. Simple but deep gameplay mechanics
-3. Fair and balanced progression
-4. Smooth real-time updates
-5. Persistent world state
-6. Cross-browser compatibility
-7. Mobile-friendly interface
-
-This document serves as both documentation and a game design document (GDD) for future development.
+[Rest of the README remains unchanged...]

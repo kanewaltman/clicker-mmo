@@ -5,12 +5,19 @@ import { RARITY_COLORS, RARITY_SCALES } from './constants';
 interface ResourceNodeProps {
   resource: WorldResource;
   onResourceClick: (resource: WorldResource) => void;
+  isMobile?: boolean;
+  isInCenter?: boolean;
 }
 
-export const ResourceNode: React.FC<ResourceNodeProps> = ({ resource, onResourceClick }) => {
+export const ResourceNode: React.FC<ResourceNodeProps> = ({ 
+  resource, 
+  onResourceClick,
+  isMobile,
+  isInCenter
+}) => {
   return (
     <div
-      className={`absolute select-none transform hover:scale-110 transition-transform cursor-pointer active:scale-95 ${RARITY_SCALES[resource.rarity]}`}
+      className={`absolute select-none transform hover:scale-110 transition-transform cursor-pointer active:scale-95 ${RARITY_SCALES[resource.rarity]} group`}
       style={{ 
         left: resource.position.x, 
         top: resource.position.y,
@@ -18,13 +25,15 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({ resource, onResource
       }}
       onClick={() => onResourceClick(resource)}
     >
-      <div className="relative group">
+      <div className="relative">
         <div className={RARITY_COLORS[resource.rarity]}>
           {resource.emoji}
         </div>
         
         {/* Resource info tooltip */}
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block">
+        <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 ${
+          isMobile ? (isInCenter ? 'opacity-100' : 'opacity-0') : 'opacity-0 group-hover:opacity-100'
+        } transition-opacity duration-200 pointer-events-none`}>
           <div className="bg-gray-800 text-white px-3 py-2 rounded shadow-lg text-sm whitespace-nowrap">
             <div className={`font-bold ${RARITY_COLORS[resource.rarity]} capitalize`}>
               {resource.rarity} {resource.type}

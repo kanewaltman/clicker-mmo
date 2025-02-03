@@ -7,17 +7,74 @@ export const useWorldControls = (
   updateCursorPosition: (x: number, y: number) => void,
   resetAFKTimer: () => void,
   setIsPanning: (isPanning: boolean) => void,
-  setCursorPosition: (position: { x: number; y: number }) => void
+  setCursorPosition: (position: { x: number; y: number }) => void,
+  onCursorClick: () => void
 ) => {
   const setWorldPosition = useGameStore((state) => state.setWorldPosition);
   const isDraggingRef = useRef(false);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const isMobileRef = useRef(false);
+  const touchStartTimeRef = useRef(0);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+  const lastUpdateTimeRef = useRef(0);
+  const rafRef = useRef<number>();
+  const isInitializedRef = useRef(false);
 
-  // Check if device is mobile
-  useEffect(() => {
-    isMobileRef.current = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  // Throttle updates using requestAnimationFrame
+  const scheduleUpdate = useCallback((fn: () => void) => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = requestAnimationFrame(() => {
+      const now = Date.now();
+      if (now - lastUpdateTimeRef.current > 16) { // ~60fps
+        lastUpdateTimeRef.current = now;
+        fn();
+      }
+    });
   }, []);
+
+  const getCenterPosition = useCallback(() => ({
+    x: window.innerWidth / 2,
+    y: window.innerHeight / 2
+  }), []);
+
+  const updateMobileCursor = useCallback(() => {
+    if (isMobileRef.current) {
+      const center = getCenterPosition();
+      setCursorPosition(center);
+      updateCursorPosition(center.x, center.y);
+    }
+  }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
+
+  // Initialize mobile detection and cursor position
+  useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    isMobileRef.current = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobileRef.current) {
+      const center = getCenterPosition();
+      setCursorPosition(center);
+      updateCursorPosition(center.x, center.y);
+      
+      // Prevent default touch behaviors
+      document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+      document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+      document.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+    }
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+      if (isMobileRef.current) {
+        document.removeEventListener('touchstart', (e) => e.preventDefault());
+        document.removeEventListener('touchmove', (e) => e.preventDefault());
+        document.removeEventListener('touchend', (e) => e.preventDefault());
+      }
+    };
+  }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     resetAFKTimer();
@@ -26,27 +83,25 @@ export const useWorldControls = (
     let newY = worldPosition.y;
     
     switch (e.key.toLowerCase()) {
-      case 'w':
-        newY += MOVE_AMOUNT;
-        break;
-      case 's':
-        newY -= MOVE_AMOUNT;
-        break;
-      case 'a':
-        newX += MOVE_AMOUNT;
-        break;
-      case 'd':
-        newX -= MOVE_AMOUNT;
-        break;
+      case 'w': newY += MOVE_AMOUNT; break;
+      case 's': newY -= MOVE_AMOUNT; break;
+      case 'a': newX += MOVE_AMOUNT; break;
+      case 'd': newX -= MOVE_AMOUNT; break;
+      default: return;
     }
 
-    setWorldPosition(newX, newY);
-    updateCursorPosition(mousePosition.x, mousePosition.y);
-  }, [worldPosition, setWorldPosition, updateCursorPosition, mousePosition, resetAFKTimer]);
+    scheduleUpdate(() => {
+      setWorldPosition(newX, newY);
+      if (isMobileRef.current) {
+        updateMobileCursor();
+      } else {
+        updateCursorPosition(mousePosition.x, mousePosition.y);
+      }
+    });
+  }, [worldPosition, setWorldPosition, updateCursorPosition, mousePosition, resetAFKTimer, updateMobileCursor, scheduleUpdate]);
 
   const handleMouseDown = useCallback((e: MouseEvent) => {
-    // Left click (button 0) or middle click (button 1)
-    if (e.button === 0 || e.button === 1) {
+    if (!isMobileRef.current && (e.button === 0 || e.button === 1)) {
       isDraggingRef.current = true;
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
       document.body.style.cursor = 'grabbing';
@@ -56,91 +111,111 @@ export const useWorldControls = (
   }, [setIsPanning, setCursorPosition]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (isDraggingRef.current) {
-      const deltaX = e.clientX - lastMousePosRef.current.x;
-      const deltaY = e.clientY - lastMousePosRef.current.y;
-      
-      setWorldPosition(
-        worldPosition.x + deltaX,
-        worldPosition.y + deltaY
-      );
-      
-      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-      setCursorPosition({ x: e.clientX, y: e.clientY });
+    if (!isMobileRef.current) {
+      if (isDraggingRef.current) {
+        scheduleUpdate(() => {
+          resetAFKTimer();
+          const deltaX = e.clientX - lastMousePosRef.current.x;
+          const deltaY = e.clientY - lastMousePosRef.current.y;
+          
+          setWorldPosition(
+            worldPosition.x + deltaX,
+            worldPosition.y + deltaY
+          );
+          
+          lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+          setCursorPosition({ x: e.clientX, y: e.clientY });
+        });
+      } else {
+        scheduleUpdate(() => {
+          setCursorPosition({ x: e.clientX, y: e.clientY });
+          updateCursorPosition(e.clientX, e.clientY);
+        });
+      }
     }
-  }, [worldPosition, setWorldPosition, setCursorPosition]);
+  }, [worldPosition, setWorldPosition, setCursorPosition, updateCursorPosition, resetAFKTimer, scheduleUpdate]);
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
-    if (isDraggingRef.current) {
+    if (!isMobileRef.current && isDraggingRef.current) {
       isDraggingRef.current = false;
       document.body.style.cursor = 'default';
       setIsPanning(false);
-      setCursorPosition({ x: e.clientX, y: e.clientY });
-      updateCursorPosition(e.clientX, e.clientY);
-    }
-  }, [setIsPanning, setCursorPosition, updateCursorPosition]);
-
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      isDraggingRef.current = true;
-      lastMousePosRef.current = { 
-        x: e.touches[0].clientX, 
-        y: e.touches[0].clientY 
-      };
-      setIsPanning(true);
-      setCursorPosition({ 
-        x: e.touches[0].clientX, 
-        y: e.touches[0].clientY 
+      scheduleUpdate(() => {
+        setCursorPosition({ x: e.clientX, y: e.clientY });
+        updateCursorPosition(e.clientX, e.clientY);
       });
     }
-  }, [setIsPanning, setCursorPosition]);
+  }, [setIsPanning, setCursorPosition, updateCursorPosition, scheduleUpdate]);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    e.preventDefault(); // Prevent default touch behavior
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      touchStartTimeRef.current = Date.now();
+      touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+      isDraggingRef.current = true;
+      lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+      setIsPanning(true);
+      updateMobileCursor(); // Keep cursor centered
+    }
+  }, [setIsPanning, updateMobileCursor]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
+    e.preventDefault(); // Prevent default touch behavior
     if (isDraggingRef.current && e.touches.length === 1) {
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - lastMousePosRef.current.x;
-      const deltaY = touch.clientY - lastMousePosRef.current.y;
-      
-      setWorldPosition(
-        worldPosition.x + deltaX,
-        worldPosition.y + deltaY
-      );
-      
-      lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
-      
-      // For mobile, keep cursor in center of screen
-      if (isMobileRef.current) {
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        setCursorPosition({ x: centerX, y: centerY });
-      } else {
-        setCursorPosition({ x: touch.clientX, y: touch.clientY });
-      }
+      scheduleUpdate(() => {
+        resetAFKTimer();
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - lastMousePosRef.current.x;
+        const deltaY = touch.clientY - lastMousePosRef.current.y;
+        
+        setWorldPosition(
+          worldPosition.x + deltaX,
+          worldPosition.y + deltaY
+        );
+        
+        lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+        updateMobileCursor(); // Keep cursor centered
+      });
     }
-  }, [worldPosition, setWorldPosition, setCursorPosition]);
+  }, [worldPosition, setWorldPosition, resetAFKTimer, updateMobileCursor, scheduleUpdate]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
+    e.preventDefault(); // Prevent default touch behavior
     if (isDraggingRef.current) {
+      const touchEndTime = Date.now();
+      const touchDuration = touchEndTime - touchStartTimeRef.current;
+      
+      if (e.changedTouches.length === 1) {
+        const touch = e.changedTouches[0];
+        const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+        const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+        
+        // If touch was short and didn't move much, treat as tap
+        if (touchDuration < 200 && deltaX < 10 && deltaY < 10) {
+          onCursorClick();
+        }
+      }
+
       isDraggingRef.current = false;
       setIsPanning(false);
-      if (e.changedTouches.length > 0) {
-        const touch = e.changedTouches[0];
-        setCursorPosition({ x: touch.clientX, y: touch.clientY });
-        updateCursorPosition(touch.clientX, touch.clientY);
-      }
+      updateMobileCursor(); // Keep cursor centered
     }
-  }, [setIsPanning, setCursorPosition, updateCursorPosition]);
+  }, [setIsPanning, onCursorClick, updateMobileCursor]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchstart', handleTouchStart);
-    window.addEventListener('touchmove', handleTouchMove);
-    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchstart', handleTouchStart, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { passive: false });
     
     return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
       window.removeEventListener('keydown', handleKeyPress);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
@@ -161,26 +236,17 @@ export const useWorldControls = (
       }
     };
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
-    };
-
     const handleGesture = (e: any) => {
       e.preventDefault();
     };
 
-    // Prevent pinch zoom
     document.addEventListener('wheel', handleWheel, { passive: false });
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
     document.addEventListener('gesturestart', handleGesture);
     document.addEventListener('gesturechange', handleGesture);
     document.addEventListener('gestureend', handleGesture);
 
     return () => {
       document.removeEventListener('wheel', handleWheel);
-      document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('gesturestart', handleGesture);
       document.removeEventListener('gesturechange', handleGesture);
       document.removeEventListener('gestureend', handleGesture);

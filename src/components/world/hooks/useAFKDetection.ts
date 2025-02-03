@@ -6,6 +6,7 @@ export const useAFKDetection = (
 ) => {
   const lastActivityRef = useRef<number>(Date.now());
   const afkTimeoutRef = useRef<number | null>(null);
+  const isInitializedRef = useRef(false);
 
   const resetAFKTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -22,6 +23,9 @@ export const useAFKDetection = (
   }, [timeout, onAFKChange]);
 
   useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         onAFKChange(true);

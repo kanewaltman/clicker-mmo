@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { Settings, Home } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
@@ -21,6 +21,10 @@ import {
 import type { Structure as StructureType, WorldResource } from '../store/gameStore';
 
 export const World: React.FC = () => {
+  const initRef = useRef(false);
+  const userId = useRef(crypto.randomUUID()).current;
+  const gameStore = useGameStore();
+
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -30,55 +34,118 @@ export const World: React.FC = () => {
   const [isAFK, setIsAFK] = useState(false);
   const [draggingStructure, setDraggingStructure] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [leaderboardPosition, setLeaderboardPosition] = useState({ x: window.innerWidth - 300, y: window.innerHeight - 200 });
+  const [leaderboardPosition, setLeaderboardPosition] = useState({ 
+    x: window.innerWidth - 300, 
+    y: window.innerHeight - 200 
+  });
   const [isDraggingLeaderboard, setIsDraggingLeaderboard] = useState(false);
   const [leaderboardDragOffset, setLeaderboardDragOffset] = useState({ x: 0, y: 0 });
-  
-  const { 
-    worldPosition,
-    resources,
-    username,
-    cursorEmoji,
-    inventory,
-    structures,
-    worldResources,
-    afkTimeout,
-    hideCursorWhilePanning,
-    teleportToCastle,
-    loadStructures,
-    loadWorldResources
-  } = useGameStore();
-  
-  const [userId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
-    const initializeGameState = async () => {
-      await Promise.all([
-        loadStructures(),
-        loadWorldResources()
-      ]);
-    };
-    
-    initializeGameState();
-  }, [loadStructures, loadWorldResources]);
+    if (!initRef.current) {
+      initRef.current = true;
+      const initializeGameState = async () => {
+        try {
+          await Promise.all([
+            gameStore.loadStructures(),
+            gameStore.loadWorldResources()
+          ]);
+        } catch (error) {
+          console.error('Failed to initialize game state:', error);
+        }
+      };
+      initializeGameState();
+    }
+  }, []);
 
-  const resetAFKTimer = useAFKDetection(afkTimeout, setIsAFK);
+  const resetAFKTimer = useAFKDetection(gameStore.afkTimeout, setIsAFK);
+
   const { cursors, updateCursorPosition } = useCursorSync(
     userId,
     isAFK,
-    worldPosition,
-    username,
-    cursorEmoji,
-    resources
+    gameStore.worldPosition,
+    gameStore.username,
+    gameStore.cursorEmoji,
+    gameStore.resources
   );
 
+  const isObjectInCenter = useCallback((objectX: number, objectY: number, threshold = 50) => {
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const rect = document.querySelector('.game-world')?.getBoundingClientRect();
+    
+    if (rect) {
+      const worldX = centerX - rect.left - gameStore.worldPosition.x;
+      const worldY = centerY - rect.top - gameStore.worldPosition.y;
+      
+      const dx = Math.abs(objectX - worldX);
+      const dy = Math.abs(objectY - worldY);
+      
+      return dx < threshold && dy < threshold;
+    }
+    return false;
+  }, [gameStore.worldPosition]);
+
+  const handleCursorClick = useCallback(() => {
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const rect = document.querySelector('.game-world')?.getBoundingClientRect();
+    
+    if (rect) {
+      const worldX = centerX - rect.left - gameStore.worldPosition.x;
+      const worldY = centerY - rect.top - gameStore.worldPosition.y;
+      
+      // Check castle first
+      const castleDistance = Math.sqrt(
+        Math.pow(TOWN_CENTER.x - worldX, 2) + 
+        Math.pow(TOWN_CENTER.y - worldY, 2)
+      );
+      
+      if (castleDistance < 48) {
+        setIsShopOpen(true);
+        return;
+      }
+
+      // Then check structures
+      const clickedStructure = gameStore.structures.find(structure => {
+        const dx = structure.position.x - worldX;
+        const dy = structure.position.y - worldY;
+        return Math.sqrt(dx * dx + dy * dy) < 30;
+      });
+
+      if (clickedStructure) {
+        if (clickedStructure.owner === userId) {
+          setDraggingStructure(clickedStructure.id);
+        } else {
+          gameStore.damageStructure(clickedStructure.id, STRUCTURE_DAMAGE);
+          if (clickedStructure.health <= STRUCTURE_DAMAGE) {
+            gameStore.removeStructure(clickedStructure.id);
+          }
+        }
+        return;
+      }
+
+      // Finally check resources
+      const clickedResource = gameStore.worldResources.find(resource => {
+        const dx = resource.position.x - worldX;
+        const dy = resource.position.y - worldY;
+        return Math.sqrt(dx * dx + dy * dy) < 50;
+      });
+
+      if (clickedResource) {
+        handleResourceClick(clickedResource);
+      }
+    }
+  }, [gameStore.worldPosition, gameStore.worldResources, gameStore.structures, userId]);
+
   useWorldControls(
-    worldPosition, 
-    mousePosition, 
-    updateCursorPosition, 
+    gameStore.worldPosition,
+    mousePosition,
+    updateCursorPosition,
     resetAFKTimer,
     setIsPanning,
-    setCursorPosition
+    setCursorPosition,
+    handleCursorClick
   );
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -86,6 +153,7 @@ export const World: React.FC = () => {
     const x = e.clientX;
     const y = e.clientY;
     setMousePosition({ x, y });
+    
     if (!isPanning) {
       setCursorPosition({ x, y });
       updateCursorPosition(x, y);
@@ -94,9 +162,9 @@ export const World: React.FC = () => {
     if (draggingStructure) {
       const rect = document.querySelector('.game-world')?.getBoundingClientRect();
       if (rect) {
-        const worldX = e.clientX - rect.left - worldPosition.x - dragOffset.x;
-        const worldY = e.clientY - rect.top - worldPosition.y - dragOffset.y;
-        useGameStore.getState().updateStructurePosition(draggingStructure, worldX, worldY);
+        const worldX = e.clientX - rect.left - gameStore.worldPosition.x - dragOffset.x;
+        const worldY = e.clientY - rect.top - gameStore.worldPosition.y - dragOffset.y;
+        gameStore.updateStructurePosition(draggingStructure, worldX, worldY);
       }
     }
 
@@ -106,7 +174,16 @@ export const World: React.FC = () => {
         y: Math.max(0, Math.min(window.innerHeight - 150, e.clientY - leaderboardDragOffset.y))
       });
     }
-  }, [resetAFKTimer, updateCursorPosition, draggingStructure, isDraggingLeaderboard, worldPosition, dragOffset, leaderboardDragOffset, isPanning]);
+  }, [
+    resetAFKTimer,
+    updateCursorPosition,
+    draggingStructure,
+    isDraggingLeaderboard,
+    gameStore.worldPosition,
+    dragOffset,
+    leaderboardDragOffset,
+    isPanning
+  ]);
 
   const handleMouseUp = useCallback(() => {
     if (draggingStructure) {
@@ -122,7 +199,7 @@ export const World: React.FC = () => {
   }, [resetAFKTimer]);
 
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('click', handleClick);
     return () => {
@@ -132,20 +209,20 @@ export const World: React.FC = () => {
     };
   }, [handleMouseMove, handleMouseUp, handleClick]);
 
-  const handleResourceClick = async (resource: WorldResource) => {
+  const handleResourceClick = useCallback(async (resource: WorldResource) => {
     resetAFKTimer();
-    await useGameStore.getState().damageResource(resource.id, 10);
-  };
+    await gameStore.damageResource(resource.id, 10);
+  }, [resetAFKTimer]);
 
-  const handlePlaceStructure = (e: React.MouseEvent) => {
-    if (!placingStructure || inventory.pickaxes <= 0) return;
+  const handlePlaceStructure = useCallback((e: React.MouseEvent) => {
+    if (!placingStructure || gameStore.inventory.pickaxes <= 0) return;
     resetAFKTimer();
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left - worldPosition.x;
-    const y = e.clientY - rect.top - worldPosition.y;
+    const x = e.clientX - rect.left - gameStore.worldPosition.x;
+    const y = e.clientY - rect.top - gameStore.worldPosition.y;
 
-    useGameStore.getState().placeStructure({
+    gameStore.placeStructure({
       type: 'pickaxe',
       position: { x, y },
       owner: userId,
@@ -153,10 +230,12 @@ export const World: React.FC = () => {
     });
 
     setPlacingStructure(false);
-  };
+  }, [placingStructure, gameStore.inventory.pickaxes, gameStore.worldPosition, userId, resetAFKTimer]);
 
-  const handleStructureMouseDown = (structure: StructureType, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleStructureMouseDown = useCallback((structure: StructureType, e: React.MouseEvent) => {
+    if (e.stopPropagation) {
+      e.stopPropagation();
+    }
     resetAFKTimer();
 
     if (structure.owner === userId) {
@@ -167,39 +246,57 @@ export const World: React.FC = () => {
         y: e.clientY - (rect.top + rect.height / 2)
       });
     } else {
-      useGameStore.getState().damageStructure(structure.id, STRUCTURE_DAMAGE);
+      gameStore.damageStructure(structure.id, STRUCTURE_DAMAGE);
       if (structure.health <= STRUCTURE_DAMAGE) {
-        useGameStore.getState().removeStructure(structure.id);
+        gameStore.removeStructure(structure.id);
       }
     }
-  };
+  }, [userId, resetAFKTimer]);
 
-  const handleCastleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCastleClick = useCallback((e: React.MouseEvent) => {
+    if (e.stopPropagation) {
+      e.stopPropagation();
+    }
     resetAFKTimer();
     setIsShopOpen(true);
-  };
+  }, [resetAFKTimer]);
 
-  const handleLeaderboardMouseDown = (e: React.MouseEvent) => {
+  const handleLeaderboardMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setIsDraggingLeaderboard(true);
     setLeaderboardDragOffset({
       x: e.clientX - leaderboardPosition.x,
       y: e.clientY - leaderboardPosition.y
     });
-  };
+  }, [leaderboardPosition]);
 
-  const allPlayers = [
-    { id: `local-${userId}`, username, points: resources, lastUpdate: Date.now() },
-    ...cursors.map(c => ({ id: `remote-${c.id}`, username: c.username, points: c.points, lastUpdate: c.lastUpdate }))
-  ];
+  const allPlayers = useMemo(() => {
+    const localPlayer = { 
+      id: `local-${userId}`, 
+      username: gameStore.username, 
+      points: gameStore.resources, 
+      lastUpdate: Date.now() 
+    };
+    const remotePlayers = cursors.map(c => ({ 
+      id: `remote-${c.id}`, 
+      username: c.username, 
+      points: c.points, 
+      lastUpdate: c.lastUpdate 
+    }));
+    return [localPlayer, ...remotePlayers];
+  }, [userId, gameStore.username, gameStore.resources, cursors]);
 
-  const topPlayers = allPlayers
-    .filter(player => Date.now() - player.lastUpdate < 30000)
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 5);
+  const topPlayers = useMemo(() => {
+    const now = Date.now();
+    return allPlayers
+      .filter(player => now - player.lastUpdate < 30000)
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 5);
+  }, [allPlayers]);
 
-  const uniqueResources = Array.from(new Map(worldResources.map(r => [r.id, r])).values());
+  const uniqueResources = useMemo(() => {
+    return Array.from(new Map(gameStore.worldResources.map(r => [r.id, r])).values());
+  }, [gameStore.worldResources]);
 
   return (
     <>
@@ -233,35 +330,35 @@ export const World: React.FC = () => {
       <div className="absolute bottom-4 left-4 z-10 flex gap-2">
         <button
           onClick={() => {
-            if (resources > 0) {
-              teleportToCastle();
+            if (gameStore.resources > 0) {
+              gameStore.teleportToCastle();
               resetAFKTimer();
             }
           }}
           className={`px-4 py-2 rounded flex items-center gap-2 ${
-            resources > 0 
+            gameStore.resources > 0 
               ? 'bg-purple-600 hover:bg-purple-700' 
               : 'bg-gray-600 cursor-not-allowed'
           } text-white transition-colors group relative`}
-          disabled={resources === 0}
+          disabled={gameStore.resources === 0}
         >
           <Home size={18} />
           Return
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block whitespace-nowrap">
             <span className="text-xs text-yellow-400 bg-black/50 px-2 py-1 rounded">
-              💰 {Math.floor(resources * 0.5)}
+              💰 {Math.floor(gameStore.resources * 0.5)}
             </span>
           </div>
         </button>
 
-        {inventory.pickaxes > 0 && (
+        {gameStore.inventory.pickaxes > 0 && (
           <button
             onClick={() => setPlacingStructure(!placingStructure)}
             className={`px-4 py-2 rounded ${
               placingStructure ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'
             } text-white transition-colors`}
           >
-            {placingStructure ? 'Cancel' : 'Place Pickaxe'} ({inventory.pickaxes})
+            {placingStructure ? 'Cancel' : 'Place Pickaxe'} ({gameStore.inventory.pickaxes})
           </button>
         )}
       </div>
@@ -274,17 +371,19 @@ export const World: React.FC = () => {
           x={TOWN_CENTER.x}
           y={TOWN_CENTER.y}
           radius={TOWN_RADIUS}
-          worldPosition={worldPosition}
+          worldPosition={gameStore.worldPosition}
           onClick={handleCastleClick}
+          isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+          isInCenter={isObjectInCenter(TOWN_CENTER.x, TOWN_CENTER.y, 48)}
         />
 
-        {(!isPanning || !hideCursorWhilePanning) && (
+        {(!isPanning || !gameStore.hideCursorWhilePanning) && (
           <PlayerCursor
             x={cursorPosition.x}
             y={cursorPosition.y}
-            emoji={cursorEmoji}
-            username={username}
-            resources={resources}
+            emoji={gameStore.cursorEmoji}
+            username={gameStore.username}
+            resources={gameStore.resources}
             isOwnCursor={true}
           />
         )}
@@ -292,7 +391,7 @@ export const World: React.FC = () => {
         <div 
           className="absolute inset-0"
           style={{
-            transform: `translate(${worldPosition.x}px, ${worldPosition.y}px)`,
+            transform: `translate(${gameStore.worldPosition.x}px, ${gameStore.worldPosition.y}px)`,
             cursor: placingStructure ? 'crosshair' : 'default'
           }}
         >
@@ -301,15 +400,19 @@ export const World: React.FC = () => {
               key={resource.id}
               resource={resource}
               onResourceClick={handleResourceClick}
+              isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+              isInCenter={isObjectInCenter(resource.position.x, resource.position.y)}
             />
           ))}
 
-          {structures.map((structure) => (
+          {gameStore.structures.map((structure) => (
             <Structure
               key={structure.id}
               structure={structure}
               onMouseDown={handleStructureMouseDown}
               maxHealth={STRUCTURE_MAX_HEALTH}
+              isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+              isInCenter={isObjectInCenter(structure.position.x, structure.position.y)}
             />
           ))}
           
