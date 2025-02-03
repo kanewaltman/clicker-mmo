@@ -16,8 +16,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [timeoutInput, setTimeoutInput] = useState(afkTimeout / 1000);
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const checkTimeoutRef = useRef<number>();
+  const checkTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (user) {
@@ -60,27 +59,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
 
     setIsCheckingName(true);
-    const { data, error } = await supabase
-      .from('user_progress')
-      .select('username')
-      .eq('username', name)
-      .neq('user_id', user?.id || '')
-      .maybeSingle();
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('username')
+        .eq('username', name)
+        .neq('user_id', user?.id || '')
+        .maybeSingle();
 
-    setIsCheckingName(false);
+      if (error) throw error;
 
-    if (error) {
+      if (data) {
+        setNameError('Username is already taken');
+        return false;
+      }
+
+      setNameError(null);
+      return true;
+    } catch (error) {
+      console.error('Error checking username:', error);
       setNameError('Error checking username availability');
       return false;
+    } finally {
+      setIsCheckingName(false);
     }
-
-    if (data) {
-      setNameError('Username is already taken');
-      return false;
-    }
-
-    setNameError(null);
-    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,25 +119,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newName = e.target.value;
     setNameInput(newName);
-    
-    // Clear any existing timeout
+
     if (checkTimeoutRef.current) {
-      window.clearTimeout(checkTimeoutRef.current);
+      clearTimeout(checkTimeoutRef.current);
     }
 
-    // Set a new timeout to check availability
-    if (user) {
-      checkTimeoutRef.current = window.setTimeout(() => {
+    if (user && newName !== username) {
+      checkTimeoutRef.current = setTimeout(() => {
         checkUsernameAvailability(newName);
       }, 500);
+    } else {
+      setNameError(null);
+      setIsCheckingName(false);
     }
   };
 
+  // Cleanup on unmount
   useEffect(() => {
-    // Cleanup timeout on unmount
     return () => {
       if (checkTimeoutRef.current) {
-        window.clearTimeout(checkTimeoutRef.current);
+        clearTimeout(checkTimeoutRef.current);
       }
     };
   }, []);
@@ -153,11 +157,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         
         <h2 className="text-2xl font-bold text-white mb-6">Settings</h2>
         
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="mb-6">
-            <label className="block text-gray-300 mb-2">Username</label>
+            <label htmlFor="username" className="block text-gray-300 mb-2">Username</label>
             <input
-              ref={inputRef}
+              id="username"
               type="text"
               value={nameInput}
               onChange={handleNameChange}
@@ -166,7 +170,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               }`}
               maxLength={15}
               required
-              disabled={isCheckingName}
+              autoComplete="off"
+              spellCheck="false"
             />
             {nameError && (
               <p className="text-red-500 text-sm mt-1">{nameError}</p>
@@ -177,8 +182,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
 
           <div className="mb-6">
-            <label className="block text-gray-300 mb-2">AFK Timer (seconds)</label>
+            <label htmlFor="afkTimer" className="block text-gray-300 mb-2">AFK Timer (seconds)</label>
             <input
+              id="afkTimer"
               type="number"
               value={timeoutInput}
               onChange={(e) => setTimeoutInput(Number(e.target.value))}
