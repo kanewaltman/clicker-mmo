@@ -15,12 +15,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     username, 
     cursorEmoji, 
     afkTimeout, 
-    showCursorWhilePanning,
+    hideCursorWhilePanning,
     user, 
     setUsername, 
     setCursorEmoji, 
     setAfkTimeout,
-    setShowCursorWhilePanning 
+    setHideCursorWhilePanning 
   } = useGameStore();
   
   const [nameInput, setNameInput] = useState(username);
@@ -226,11 +226,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <label className="flex items-center gap-2 text-gray-300">
               <input
                 type="checkbox"
-                checked={showCursorWhilePanning}
-                onChange={(e) => setShowCursorWhilePanning(e.target.checked)}
+                checked={hideCursorWhilePanning}
+                onChange={(e) => setHideCursorWhilePanning(e.target.checked)}
                 className="rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
               />
-              Show cursor while panning
+              Hide cursor while panning
             </label>
           </div>
           

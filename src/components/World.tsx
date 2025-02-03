@@ -43,7 +43,7 @@ export const World: React.FC = () => {
     structures,
     worldResources,
     afkTimeout,
-    showCursorWhilePanning,
+    hideCursorWhilePanning,
     teleportToCastle,
     loadStructures,
     loadWorldResources
@@ -278,7 +278,7 @@ export const World: React.FC = () => {
           onClick={handleCastleClick}
         />
 
-        {(!isPanning || showCursorWhilePanning) && (
+        {(!isPanning || !hideCursorWhilePanning) && (
           <PlayerCursor
             x={cursorPosition.x}
             y={cursorPosition.y}

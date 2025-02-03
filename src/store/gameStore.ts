@@ -16,7 +16,7 @@ interface GameState {
   afkTimeout: number;
   user: any | null;
   progressId: string | null;
-  showCursorWhilePanning: boolean;
+  hideCursorWhilePanning: boolean;
   setWorldPosition: (x: number, y: number) => void;
   addResources: (amount: number) => void;
   addCamp: (camp: Camp) => void;
@@ -38,7 +38,7 @@ interface GameState {
   setUser: (user: any | null) => void;
   loadUserProgress: () => Promise<void>;
   saveUserProgress: () => Promise<void>;
-  setShowCursorWhilePanning: (show: boolean) => void;
+  setHideCursorWhilePanning: (hide: boolean) => void;
 }
 
 interface Camp {
@@ -318,7 +318,7 @@ const useGameStore = create<GameState>()(
       afkTimeout: DEFAULT_AFK_TIMEOUT,
       user: null,
       progressId: null,
-      showCursorWhilePanning: false,
+      hideCursorWhilePanning: false,
 
       loadStructures: async () => {
         try {
@@ -388,7 +388,7 @@ const useGameStore = create<GameState>()(
       setUsername: (name) => set({ username: name }),
       setCursorEmoji: (emoji) => set({ cursorEmoji: emoji }),
       setAfkTimeout: (timeout) => set({ afkTimeout: timeout }),
-      setShowCursorWhilePanning: (show) => set({ showCursorWhilePanning: show }),
+      setHideCursorWhilePanning: (hide) => set({ hideCursorWhilePanning: hide }),
 
       teleportToCastle: () => {
         const currentResources = get().resources;
@@ -736,7 +736,7 @@ const useGameStore = create<GameState>()(
         username: state.username,
         cursorEmoji: state.cursorEmoji,
         afkTimeout: state.afkTimeout,
-        showCursorWhilePanning: state.showCursorWhilePanning
+        hideCursorWhilePanning: state.hideCursorWhilePanning
       })
     }
   )
