@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -16,6 +16,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [timeoutInput, setTimeoutInput] = useState(afkTimeout / 1000);
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const checkTimeoutRef = useRef<number>();
 
   useEffect(() => {
     if (user) {
@@ -111,13 +113,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     onClose();
   };
 
-  const handleNameChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newName = e.target.value;
     setNameInput(newName);
+    
+    // Clear any existing timeout
+    if (checkTimeoutRef.current) {
+      window.clearTimeout(checkTimeoutRef.current);
+    }
+
+    // Set a new timeout to check availability
     if (user) {
-      await checkUsernameAvailability(newName);
+      checkTimeoutRef.current = window.setTimeout(() => {
+        checkUsernameAvailability(newName);
+      }, 500);
     }
   };
+
+  useEffect(() => {
+    // Cleanup timeout on unmount
+    return () => {
+      if (checkTimeoutRef.current) {
+        window.clearTimeout(checkTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -137,6 +157,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <div className="mb-6">
             <label className="block text-gray-300 mb-2">Username</label>
             <input
+              ref={inputRef}
               type="text"
               value={nameInput}
               onChange={handleNameChange}
