@@ -8,6 +8,7 @@ import { Structure } from './world/Structure';
 import { PlayerCursor } from './world/PlayerCursor';
 import { TownCenter } from './world/TownCenter';
 import { Leaderboard } from './world/Leaderboard';
+import { AllTimeLeaderboard } from './world/AllTimeLeaderboard';
 import { useAFKDetection } from './world/hooks/useAFKDetection';
 import { useCursorSync } from './world/hooks/useCursorSync';
 import { useWorldControls } from './world/hooks/useWorldControls';
@@ -207,6 +208,8 @@ export const World: React.FC = () => {
           <Settings className="text-white" size={24} />
         </button>
       </div>
+
+      <AllTimeLeaderboard />
 
       <Leaderboard
         position={leaderboardPosition}

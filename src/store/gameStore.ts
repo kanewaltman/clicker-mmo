@@ -538,6 +538,7 @@ const useGameStore = create<GameState>()(
           const resource = get().worldResources.find(r => r.id === resourceId);
           
           if (!resource) {
+            console.log('Resource not found, refreshing resources...');
             await get().loadWorldResources();
             return;
           }
@@ -546,10 +547,17 @@ const useGameStore = create<GameState>()(
             .from('resources')
             .select('current_health, value_per_click')
             .eq('id', resourceId)
-            .single();
+            .maybeSingle(); // Use maybeSingle instead of single
 
           if (fetchError) {
             console.error('Error fetching resource:', fetchError);
+            return;
+          }
+
+          // If resource doesn't exist in DB anymore, refresh the world resources
+          if (!currentResource) {
+            console.log('Resource no longer exists, refreshing resources...');
+            await get().loadWorldResources();
             return;
           }
 
