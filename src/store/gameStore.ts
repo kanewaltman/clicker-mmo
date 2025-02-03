@@ -16,6 +16,7 @@ interface GameState {
   afkTimeout: number;
   user: any | null;
   progressId: string | null;
+  showCursorWhilePanning: boolean;
   setWorldPosition: (x: number, y: number) => void;
   addResources: (amount: number) => void;
   addCamp: (camp: Camp) => void;
@@ -37,6 +38,7 @@ interface GameState {
   setUser: (user: any | null) => void;
   loadUserProgress: () => Promise<void>;
   saveUserProgress: () => Promise<void>;
+  setShowCursorWhilePanning: (show: boolean) => void;
 }
 
 interface Camp {
@@ -316,6 +318,7 @@ const useGameStore = create<GameState>()(
       afkTimeout: DEFAULT_AFK_TIMEOUT,
       user: null,
       progressId: null,
+      showCursorWhilePanning: false,
 
       loadStructures: async () => {
         try {
@@ -385,6 +388,7 @@ const useGameStore = create<GameState>()(
       setUsername: (name) => set({ username: name }),
       setCursorEmoji: (emoji) => set({ cursorEmoji: emoji }),
       setAfkTimeout: (timeout) => set({ afkTimeout: timeout }),
+      setShowCursorWhilePanning: (show) => set({ showCursorWhilePanning: show }),
 
       teleportToCastle: () => {
         const currentResources = get().resources;
@@ -547,14 +551,13 @@ const useGameStore = create<GameState>()(
             .from('resources')
             .select('current_health, value_per_click')
             .eq('id', resourceId)
-            .maybeSingle(); // Use maybeSingle instead of single
+            .maybeSingle();
 
           if (fetchError) {
             console.error('Error fetching resource:', fetchError);
             return;
           }
 
-          // If resource doesn't exist in DB anymore, refresh the world resources
           if (!currentResource) {
             console.log('Resource no longer exists, refreshing resources...');
             await get().loadWorldResources();
@@ -732,7 +735,8 @@ const useGameStore = create<GameState>()(
       partialize: (state) => ({
         username: state.username,
         cursorEmoji: state.cursorEmoji,
-        afkTimeout: state.afkTimeout
+        afkTimeout: state.afkTimeout,
+        showCursorWhilePanning: state.showCursorWhilePanning
       })
     }
   )

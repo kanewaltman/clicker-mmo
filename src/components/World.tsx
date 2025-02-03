@@ -22,6 +22,8 @@ import type { Structure as StructureType, WorldResource } from '../store/gameSto
 
 export const World: React.FC = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [placingStructure, setPlacingStructure] = useState(false);
@@ -41,6 +43,7 @@ export const World: React.FC = () => {
     structures,
     worldResources,
     afkTimeout,
+    showCursorWhilePanning,
     teleportToCastle,
     loadStructures,
     loadWorldResources
@@ -48,7 +51,6 @@ export const World: React.FC = () => {
   
   const [userId] = useState(() => crypto.randomUUID());
 
-  // Load initial state
   useEffect(() => {
     const initializeGameState = async () => {
       await Promise.all([
@@ -70,14 +72,24 @@ export const World: React.FC = () => {
     resources
   );
 
-  useWorldControls(worldPosition, mousePosition, updateCursorPosition, resetAFKTimer);
+  useWorldControls(
+    worldPosition, 
+    mousePosition, 
+    updateCursorPosition, 
+    resetAFKTimer,
+    setIsPanning,
+    setCursorPosition
+  );
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     resetAFKTimer();
     const x = e.clientX;
     const y = e.clientY;
     setMousePosition({ x, y });
-    updateCursorPosition(x, y);
+    if (!isPanning) {
+      setCursorPosition({ x, y });
+      updateCursorPosition(x, y);
+    }
 
     if (draggingStructure) {
       const rect = document.querySelector('.game-world')?.getBoundingClientRect();
@@ -94,7 +106,7 @@ export const World: React.FC = () => {
         y: Math.max(0, Math.min(window.innerHeight - 150, e.clientY - leaderboardDragOffset.y))
       });
     }
-  }, [resetAFKTimer, updateCursorPosition, draggingStructure, isDraggingLeaderboard, worldPosition, dragOffset, leaderboardDragOffset]);
+  }, [resetAFKTimer, updateCursorPosition, draggingStructure, isDraggingLeaderboard, worldPosition, dragOffset, leaderboardDragOffset, isPanning]);
 
   const handleMouseUp = useCallback(() => {
     if (draggingStructure) {
@@ -266,14 +278,16 @@ export const World: React.FC = () => {
           onClick={handleCastleClick}
         />
 
-        <PlayerCursor
-          x={mousePosition.x}
-          y={mousePosition.y}
-          emoji={cursorEmoji}
-          username={username}
-          resources={resources}
-          isOwnCursor={true}
-        />
+        {(!isPanning || showCursorWhilePanning) && (
+          <PlayerCursor
+            x={cursorPosition.x}
+            y={cursorPosition.y}
+            emoji={cursorEmoji}
+            username={username}
+            resources={resources}
+            isOwnCursor={true}
+          />
+        )}
 
         <div 
           className="absolute inset-0"

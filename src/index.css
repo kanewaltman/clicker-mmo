@@ -2,12 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Disable zooming */
+/* Disable zooming and touch behaviors */
 html {
-  touch-action: manipulation;
+  touch-action: none;
   -ms-content-zooming: none;
-  -ms-touch-action: manipulation;
+  -ms-touch-action: none;
   zoom: reset;
+  overflow: hidden;
+}
+
+body {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 /* Prevent text selection */
@@ -16,6 +24,7 @@ html {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Allow text selection in input fields */
@@ -24,4 +33,9 @@ input, textarea {
   -moz-user-select: text;
   -ms-user-select: text;
   user-select: text;
+}
+
+/* Prevent pull-to-refresh on mobile */
+body {
+  overscroll-behavior-y: none;
 }

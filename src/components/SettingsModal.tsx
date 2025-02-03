@@ -11,7 +11,18 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { username, cursorEmoji, afkTimeout, user, setUsername, setCursorEmoji, setAfkTimeout } = useGameStore();
+  const { 
+    username, 
+    cursorEmoji, 
+    afkTimeout, 
+    showCursorWhilePanning,
+    user, 
+    setUsername, 
+    setCursorEmoji, 
+    setAfkTimeout,
+    setShowCursorWhilePanning 
+  } = useGameStore();
+  
   const [nameInput, setNameInput] = useState(username);
   const [timeoutInput, setTimeoutInput] = useState(afkTimeout / 1000);
   const [isCheckingName, setIsCheckingName] = useState(false);
@@ -20,7 +31,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   useEffect(() => {
     if (user) {
-      // Load username from user_progress when authenticated
       const loadUsername = async () => {
         const { data, error } = await supabase
           .from('user_progress')
@@ -97,7 +107,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setAfkTimeout(Math.max(3000, Math.min(300000, timeoutInput * 1000)));
 
     if (user) {
-      // Update username in user_progress when authenticated
       const { error } = await supabase
         .from('user_progress')
         .upsert({
@@ -134,7 +143,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (checkTimeoutRef.current) {
@@ -212,6 +220,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mb-6">
+            <label className="flex items-center gap-2 text-gray-300">
+              <input
+                type="checkbox"
+                checked={showCursorWhilePanning}
+                onChange={(e) => setShowCursorWhilePanning(e.target.checked)}
+                className="rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              Show cursor while panning
+            </label>
           </div>
           
           <button
