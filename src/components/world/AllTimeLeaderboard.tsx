@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 interface LeaderboardEntry {
   resources: number;
   user_id: string;
+  username: string;
 }
 
 export const AllTimeLeaderboard: React.FC = () => {
@@ -13,7 +14,7 @@ export const AllTimeLeaderboard: React.FC = () => {
     const fetchLeaders = async () => {
       const { data, error } = await supabase
         .from('user_progress')
-        .select('resources, user_id')
+        .select('resources, user_id, username')
         .order('resources', { ascending: false });
 
       if (error) {
@@ -58,7 +59,7 @@ export const AllTimeLeaderboard: React.FC = () => {
             className="flex items-center gap-2 text-sm"
           >
             <span className="text-yellow-400 w-4">{index + 1}.</span>
-            <span className="text-white">Player {index + 1}</span>
+            <span className="text-white">{leader.username || `Player ${index + 1}`}</span>
             <span className="text-yellow-400">💰 {leader.resources}</span>
           </div>
         ))}

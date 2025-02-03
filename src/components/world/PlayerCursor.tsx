@@ -24,7 +24,7 @@ export const PlayerCursor: React.FC<PlayerCursorProps> = ({
       className="fixed pointer-events-none z-50"
       style={{
         left: x,
-        top: isOwnCursor ? y : y - 50, // Offset other players' cursors by 50px
+        top: isOwnCursor ? y : y - 50,
         transform: 'translate(-50%, -50%)'
       }}
     >
