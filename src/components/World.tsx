@@ -24,9 +24,13 @@ export const World: React.FC = () => {
   const initRef = useRef(false);
   const userId = useRef(crypto.randomUUID()).current;
   const gameStore = useGameStore();
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const [cursorPosition, setCursorPosition] = useState({ 
+    x: window.innerWidth / 2, 
+    y: window.innerHeight / 2 
+  });
   const [isPanning, setIsPanning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -154,7 +158,7 @@ export const World: React.FC = () => {
     const y = e.clientY;
     setMousePosition({ x, y });
     
-    if (!isPanning) {
+    if (!isPanning && !isMobile) {
       setCursorPosition({ x, y });
       updateCursorPosition(x, y);
     }
@@ -182,7 +186,8 @@ export const World: React.FC = () => {
     gameStore.worldPosition,
     dragOffset,
     leaderboardDragOffset,
-    isPanning
+    isPanning,
+    isMobile
   ]);
 
   const handleMouseUp = useCallback(() => {
@@ -373,7 +378,7 @@ export const World: React.FC = () => {
           radius={TOWN_RADIUS}
           worldPosition={gameStore.worldPosition}
           onClick={handleCastleClick}
-          isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+          isMobile={isMobile}
           isInCenter={isObjectInCenter(TOWN_CENTER.x, TOWN_CENTER.y, 48)}
         />
 
@@ -400,7 +405,7 @@ export const World: React.FC = () => {
               key={resource.id}
               resource={resource}
               onResourceClick={handleResourceClick}
-              isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+              isMobile={isMobile}
               isInCenter={isObjectInCenter(resource.position.x, resource.position.y)}
             />
           ))}
@@ -411,7 +416,7 @@ export const World: React.FC = () => {
               structure={structure}
               onMouseDown={handleStructureMouseDown}
               maxHealth={STRUCTURE_MAX_HEALTH}
-              isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+              isMobile={isMobile}
               isInCenter={isObjectInCenter(structure.position.x, structure.position.y)}
             />
           ))}

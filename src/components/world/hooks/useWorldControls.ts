@@ -20,14 +20,13 @@ export const useWorldControls = (
   const rafRef = useRef<number>();
   const isInitializedRef = useRef(false);
 
-  // Throttle updates using requestAnimationFrame
   const scheduleUpdate = useCallback((fn: () => void) => {
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
     }
     rafRef.current = requestAnimationFrame(() => {
       const now = Date.now();
-      if (now - lastUpdateTimeRef.current > 16) { // ~60fps
+      if (now - lastUpdateTimeRef.current > 16) {
         lastUpdateTimeRef.current = now;
         fn();
       }
@@ -47,34 +46,10 @@ export const useWorldControls = (
     }
   }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
 
-  // Initialize mobile detection and cursor position
-  useEffect(() => {
-    if (isInitializedRef.current) return;
-    isInitializedRef.current = true;
-
-    isMobileRef.current = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isMobileRef.current) {
-      const center = getCenterPosition();
-      setCursorPosition(center);
-      updateCursorPosition(center.x, center.y);
-      
-      // Prevent default touch behaviors
-      document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-      document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-      document.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
-    }
-
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-      if (isMobileRef.current) {
-        document.removeEventListener('touchstart', (e) => e.preventDefault());
-        document.removeEventListener('touchmove', (e) => e.preventDefault());
-        document.removeEventListener('touchend', (e) => e.preventDefault());
-      }
-    };
-  }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
+  const isGameplayElement = useCallback((element: HTMLElement | null) => {
+    if (!element) return false;
+    return element.closest('.game-world') !== null;
+  }, []);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     resetAFKTimer();
@@ -148,60 +123,93 @@ export const useWorldControls = (
   }, [setIsPanning, setCursorPosition, updateCursorPosition, scheduleUpdate]);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    e.preventDefault(); // Prevent default touch behavior
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      touchStartTimeRef.current = Date.now();
-      touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
-      isDraggingRef.current = true;
-      lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
-      setIsPanning(true);
-      updateMobileCursor(); // Keep cursor centered
+    const target = e.target as HTMLElement;
+    
+    // Only handle game world touches
+    if (isGameplayElement(target)) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        touchStartTimeRef.current = Date.now();
+        touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+        isDraggingRef.current = true;
+        lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+        setIsPanning(true);
+        updateMobileCursor();
+      }
     }
-  }, [setIsPanning, updateMobileCursor]);
+  }, [setIsPanning, updateMobileCursor, isGameplayElement]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    e.preventDefault(); // Prevent default touch behavior
-    if (isDraggingRef.current && e.touches.length === 1) {
-      scheduleUpdate(() => {
-        resetAFKTimer();
-        const touch = e.touches[0];
-        const deltaX = touch.clientX - lastMousePosRef.current.x;
-        const deltaY = touch.clientY - lastMousePosRef.current.y;
-        
-        setWorldPosition(
-          worldPosition.x + deltaX,
-          worldPosition.y + deltaY
-        );
-        
-        lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
-        updateMobileCursor(); // Keep cursor centered
-      });
+    const target = e.target as HTMLElement;
+    
+    // Only handle game world touches
+    if (isGameplayElement(target)) {
+      e.preventDefault();
+      if (isDraggingRef.current && e.touches.length === 1) {
+        scheduleUpdate(() => {
+          resetAFKTimer();
+          const touch = e.touches[0];
+          const deltaX = touch.clientX - lastMousePosRef.current.x;
+          const deltaY = touch.clientY - lastMousePosRef.current.y;
+          
+          setWorldPosition(
+            worldPosition.x + deltaX,
+            worldPosition.y + deltaY
+          );
+          
+          lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+          updateMobileCursor();
+        });
+      }
     }
-  }, [worldPosition, setWorldPosition, resetAFKTimer, updateMobileCursor, scheduleUpdate]);
+  }, [worldPosition, setWorldPosition, resetAFKTimer, updateMobileCursor, scheduleUpdate, isGameplayElement]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    e.preventDefault(); // Prevent default touch behavior
-    if (isDraggingRef.current) {
-      const touchEndTime = Date.now();
-      const touchDuration = touchEndTime - touchStartTimeRef.current;
-      
-      if (e.changedTouches.length === 1) {
-        const touch = e.changedTouches[0];
-        const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
-        const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+    const target = e.target as HTMLElement;
+    
+    // Only handle game world touches
+    if (isGameplayElement(target)) {
+      e.preventDefault();
+      if (isDraggingRef.current) {
+        const touchEndTime = Date.now();
+        const touchDuration = touchEndTime - touchStartTimeRef.current;
         
-        // If touch was short and didn't move much, treat as tap
-        if (touchDuration < 200 && deltaX < 10 && deltaY < 10) {
-          onCursorClick();
+        if (e.changedTouches.length === 1) {
+          const touch = e.changedTouches[0];
+          const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+          const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+          
+          // If touch was short and didn't move much, treat as tap
+          if (touchDuration < 200 && deltaX < 10 && deltaY < 10) {
+            onCursorClick();
+          }
         }
-      }
 
-      isDraggingRef.current = false;
-      setIsPanning(false);
-      updateMobileCursor(); // Keep cursor centered
+        isDraggingRef.current = false;
+        setIsPanning(false);
+        updateMobileCursor();
+      }
     }
-  }, [setIsPanning, onCursorClick, updateMobileCursor]);
+  }, [setIsPanning, onCursorClick, updateMobileCursor, isGameplayElement]);
+
+  useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    isMobileRef.current = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobileRef.current) {
+      const center = getCenterPosition();
+      setCursorPosition(center);
+      updateCursorPosition(center.x, center.y);
+    }
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -227,7 +235,6 @@ export const useWorldControls = (
   }, [handleKeyPress, handleMouseDown, handleMouseMove, handleMouseUp, 
       handleTouchStart, handleTouchMove, handleTouchEnd]);
 
-  // Prevent zooming and unwanted mobile behaviors
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey) {
@@ -237,7 +244,9 @@ export const useWorldControls = (
     };
 
     const handleGesture = (e: any) => {
-      e.preventDefault();
+      if (isGameplayElement(e.target)) {
+        e.preventDefault();
+      }
     };
 
     document.addEventListener('wheel', handleWheel, { passive: false });
@@ -251,5 +260,5 @@ export const useWorldControls = (
       document.removeEventListener('gesturechange', handleGesture);
       document.removeEventListener('gestureend', handleGesture);
     };
-  }, []);
+  }, [isGameplayElement]);
 };

@@ -22,7 +22,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 }) => {
   return (
     <div 
-      className="fixed z-10 bg-gray-800/90 p-4 rounded-lg backdrop-blur-sm shadow-lg cursor-move"
+      className="fixed z-10 bg-gray-800/90 p-4 rounded-lg backdrop-blur-sm shadow-lg cursor-move leaderboard"
       style={{
         left: position.x,
         top: position.y,
