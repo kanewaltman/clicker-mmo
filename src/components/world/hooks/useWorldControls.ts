@@ -59,10 +59,11 @@ export const useWorldControls = (
       '.shop-modal',
       '[role="button"]',
       '[role="dialog"]',
+      '[role="navigation"]',
       'input',
       'select',
       'a',
-      '.game-ui' // Add this class to UI containers
+      '.game-ui'
     ];
     
     // Check if the element or any of its parents match UI selectors
@@ -105,23 +106,6 @@ export const useWorldControls = (
     return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
-      }
-      if (isMobileRef.current) {
-        document.removeEventListener('touchstart', (e) => {
-          if (!isUIElement(e.target as HTMLElement)) {
-            e.preventDefault();
-          }
-        });
-        document.removeEventListener('touchmove', (e) => {
-          if (!isUIElement(e.target as HTMLElement)) {
-            e.preventDefault();
-          }
-        });
-        document.removeEventListener('touchend', (e) => {
-          if (!isUIElement(e.target as HTMLElement)) {
-            e.preventDefault();
-          }
-        });
       }
     };
   }, [getCenterPosition, setCursorPosition, updateCursorPosition, isUIElement]);
@@ -211,6 +195,7 @@ export const useWorldControls = (
       isDraggingRef.current = true;
       lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
       setIsPanning(true);
+      // Keep cursor in center on mobile
       updateMobileCursor();
     }
   }, [setIsPanning, updateMobileCursor, isUIElement]);
@@ -235,6 +220,7 @@ export const useWorldControls = (
         );
         
         lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+        // Keep cursor in center on mobile
         updateMobileCursor();
       });
     }
@@ -264,6 +250,7 @@ export const useWorldControls = (
 
       isDraggingRef.current = false;
       setIsPanning(false);
+      // Keep cursor in center on mobile
       updateMobileCursor();
     }
   }, [setIsPanning, onCursorClick, updateMobileCursor, isUIElement]);
