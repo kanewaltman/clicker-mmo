@@ -44,6 +44,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   const dragCurrentY = useRef(0);
   const isDragging = useRef(false);
   const initialTouchY = useRef(0);
+  const lastTouchY = useRef(0);
+  const lastTouchTime = useRef(0);
 
   // Reset transform when sheet opens with bounce effect
   useEffect(() => {
@@ -78,6 +80,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     const touch = e.touches[0];
     dragStartY.current = touch.clientY;
     initialTouchY.current = touch.clientY;
+    lastTouchY.current = touch.clientY;
+    lastTouchTime.current = e.timeStamp;
     dragCurrentY.current = 0;
     isDragging.current = true;
 
@@ -106,6 +110,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     } else {
       dragCurrentY.current = deltaY;
     }
+
+    // Update last touch position and time for velocity calculation
+    lastTouchY.current = touch.clientY;
+    lastTouchTime.current = e.timeStamp;
     
     requestAnimationFrame(() => {
       if (sheetRef.current) {
@@ -120,27 +128,33 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     e.stopPropagation();
     isDragging.current = false;
     
-    // Restore transition
-    sheetRef.current.style.transition = 'transform 200ms ease-out';
+    // Calculate velocity (pixels per millisecond)
+    const touchDuration = e.timeStamp - lastTouchTime.current;
+    const touchDistance = e.changedTouches[0].clientY - lastTouchY.current;
+    const velocity = touchDistance / touchDuration;
     
     // Reduced threshold to 5% of screen height
     const threshold = window.innerHeight * 0.05;
-    const velocity = Math.abs(e.changedTouches[0].clientY - initialTouchY.current) / e.timeStamp;
     
-    if (dragCurrentY.current > threshold || velocity > 0.5) {
-      // Animate to final position before closing
-      const finalY = window.innerHeight + 100; // Add extra 100px to ensure full dismissal
+    if (dragCurrentY.current > threshold || velocity > 0.2) {
+      // Calculate final position based on velocity
+      const projectedDistance = dragCurrentY.current + (velocity * 200); // Project 200ms into the future
+      const finalY = Math.max(dragCurrentY.current, projectedDistance);
+      
+      // Animate to the projected position with momentum
+      sheetRef.current.style.transition = `transform ${Math.abs(velocity) * 500}ms cubic-bezier(0.33, 1, 0.68, 1)`;
       sheetRef.current.style.transform = `translateY(${finalY}px)`;
       
-      // Wait for animation to complete before closing
+      // Close after animation
       setTimeout(() => {
         setIsOpen(false);
-        // Reset transform after closing
         if (sheetRef.current) {
-          sheetRef.current.style.transform = 'translateY(120%)'; // Increase to 120% to ensure no visibility
+          sheetRef.current.style.transform = 'translateY(120%)';
         }
-      }, 200);
+      }, Math.abs(velocity) * 500);
     } else {
+      // Snap back to open position
+      sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
       sheetRef.current.style.transform = 'translateY(0)';
     }
     
