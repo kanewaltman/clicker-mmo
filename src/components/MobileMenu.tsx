@@ -46,21 +46,32 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   const initialTouchY = useRef(0);
   const lastTouchY = useRef(0);
   const lastTouchTime = useRef(0);
+  const animationFrameRef = useRef<number>();
 
   // Reset transform when sheet opens with bounce effect
   useEffect(() => {
-    if (sheetRef.current && isOpen) {
-      // Initial overshoot
-      sheetRef.current.style.transition = 'transform 300ms cubic-bezier(0.32, 0, 0.67, 0)';
-      sheetRef.current.style.transform = 'translateY(-12px)';
-      
-      // Bounce back
-      setTimeout(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => {
         if (sheetRef.current) {
-          sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.33, 1, 0.68, 1)';
-          sheetRef.current.style.transform = 'translateY(0)';
+          sheetRef.current.style.transform = 'translateY(100%)';
+          
+          // Initial overshoot
+          requestAnimationFrame(() => {
+            if (sheetRef.current) {
+              sheetRef.current.style.transition = 'transform 300ms cubic-bezier(0.32, 0, 0.67, 0)';
+              sheetRef.current.style.transform = 'translateY(-12px)';
+              
+              // Bounce back
+              setTimeout(() => {
+                if (sheetRef.current) {
+                  sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.33, 1, 0.68, 1)';
+                  sheetRef.current.style.transform = 'translateY(0)';
+                }
+              }, 300);
+            }
+          });
         }
-      }, 300);
+      });
     }
   }, [isOpen]);
 
@@ -89,6 +100,11 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     if (sheetRef.current) {
       sheetRef.current.style.transition = 'none';
     }
+
+    // Cancel any ongoing animations
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -100,11 +116,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     
     // Apply progressive resistance to upward movement
     if (deltaY < 0) {
-      // Start with strong initial resistance that increases more gradually
       const absUpwardDelta = Math.abs(deltaY);
-      // Base resistance starts at 3 and increases more slowly
       const resistance = 3 + (absUpwardDelta / 50);
-      // Apply a smooth easing function
       const easedDelta = deltaY / resistance;
       dragCurrentY.current = easedDelta;
     } else {
@@ -115,11 +128,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     lastTouchY.current = touch.clientY;
     lastTouchTime.current = e.timeStamp;
     
-    requestAnimationFrame(() => {
-      if (sheetRef.current) {
-        sheetRef.current.style.transform = `translateY(${dragCurrentY.current}px)`;
-      }
-    });
+    // Use transform3d for better performance
+    sheetRef.current.style.transform = `translate3d(0, ${dragCurrentY.current}px, 0)`;
   }, []);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
@@ -137,25 +147,28 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     const threshold = window.innerHeight * 0.05;
     
     if (dragCurrentY.current > threshold || velocity > 0.2) {
-      // Calculate final position based on velocity
-      const projectedDistance = dragCurrentY.current + (velocity * 200); // Project 200ms into the future
-      const finalY = Math.max(dragCurrentY.current, projectedDistance);
+      // Immediately start closing animation
+      const duration = Math.min(Math.abs(velocity) * 500, 300);
+      sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1)`;
+      sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
       
-      // Animate to the projected position with momentum
-      sheetRef.current.style.transition = `transform ${Math.abs(velocity) * 500}ms cubic-bezier(0.33, 1, 0.68, 1)`;
-      sheetRef.current.style.transform = `translateY(${finalY}px)`;
-      
-      // Close after animation
-      setTimeout(() => {
-        setIsOpen(false);
+      // Ensure we clean up properly
+      const cleanup = () => {
         if (sheetRef.current) {
-          sheetRef.current.style.transform = 'translateY(120%)';
+          sheetRef.current.removeEventListener('transitionend', cleanup);
+          setIsOpen(false);
+          sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
         }
-      }, Math.abs(velocity) * 500);
+      };
+      
+      sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
+      
+      // Fallback cleanup in case transitionend doesn't fire
+      setTimeout(cleanup, duration + 100);
     } else {
       // Snap back to open position
       sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
-      sheetRef.current.style.transform = 'translateY(0)';
+      sheetRef.current.style.transform = 'translate3d(0, 0, 0)';
     }
     
     dragCurrentY.current = 0;
@@ -165,6 +178,15 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     e.preventDefault();
     e.stopPropagation();
     setIsOpen(true);
+  }, []);
+
+  // Cleanup animations on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -206,7 +228,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         style={{ 
           willChange: 'transform',
           touchAction: 'none',
-          transform: 'translateY(120%)', // Start at 120% to ensure no visibility
+          transform: 'translate3d(0, 120%, 0)',
           transition: 'transform 200ms ease-out'
         }}
       >
