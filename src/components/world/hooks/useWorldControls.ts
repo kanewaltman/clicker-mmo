@@ -47,6 +47,30 @@ export const useWorldControls = (
     }
   }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
 
+  // Check if an element is a UI element that should handle touch events normally
+  const isUIElement = useCallback((element: HTMLElement | null): boolean => {
+    if (!element) return false;
+    
+    // List of selectors for UI elements
+    const uiSelectors = [
+      'button',
+      '.leaderboard',
+      '.settings-modal',
+      '.shop-modal',
+      '[role="button"]',
+      '[role="dialog"]',
+      'input',
+      'select',
+      'a',
+      '.game-ui' // Add this class to UI containers
+    ];
+    
+    // Check if the element or any of its parents match UI selectors
+    return uiSelectors.some(selector => 
+      element.matches(selector) || element.closest(selector) !== null
+    );
+  }, []);
+
   // Initialize mobile detection and cursor position
   useEffect(() => {
     if (isInitializedRef.current) return;
@@ -58,10 +82,24 @@ export const useWorldControls = (
       setCursorPosition(center);
       updateCursorPosition(center.x, center.y);
       
-      // Prevent default touch behaviors
-      document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-      document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-      document.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+      // Only prevent default on non-UI elements
+      document.addEventListener('touchstart', (e) => {
+        if (!isUIElement(e.target as HTMLElement)) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      document.addEventListener('touchmove', (e) => {
+        if (!isUIElement(e.target as HTMLElement)) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      document.addEventListener('touchend', (e) => {
+        if (!isUIElement(e.target as HTMLElement)) {
+          e.preventDefault();
+        }
+      }, { passive: false });
     }
 
     return () => {
@@ -69,12 +107,24 @@ export const useWorldControls = (
         cancelAnimationFrame(rafRef.current);
       }
       if (isMobileRef.current) {
-        document.removeEventListener('touchstart', (e) => e.preventDefault());
-        document.removeEventListener('touchmove', (e) => e.preventDefault());
-        document.removeEventListener('touchend', (e) => e.preventDefault());
+        document.removeEventListener('touchstart', (e) => {
+          if (!isUIElement(e.target as HTMLElement)) {
+            e.preventDefault();
+          }
+        });
+        document.removeEventListener('touchmove', (e) => {
+          if (!isUIElement(e.target as HTMLElement)) {
+            e.preventDefault();
+          }
+        });
+        document.removeEventListener('touchend', (e) => {
+          if (!isUIElement(e.target as HTMLElement)) {
+            e.preventDefault();
+          }
+        });
       }
     };
-  }, [getCenterPosition, setCursorPosition, updateCursorPosition]);
+  }, [getCenterPosition, setCursorPosition, updateCursorPosition, isUIElement]);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     resetAFKTimer();
@@ -148,10 +198,8 @@ export const useWorldControls = (
   }, [setIsPanning, setCursorPosition, updateCursorPosition, scheduleUpdate]);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    // Don't prevent default on UI elements
-    const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('.leaderboard') || 
-        target.closest('.settings-modal') || target.closest('.shop-modal')) {
+    // Allow normal touch behavior for UI elements
+    if (isUIElement(e.target as HTMLElement)) {
       return;
     }
     
@@ -165,13 +213,11 @@ export const useWorldControls = (
       setIsPanning(true);
       updateMobileCursor();
     }
-  }, [setIsPanning, updateMobileCursor]);
+  }, [setIsPanning, updateMobileCursor, isUIElement]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    // Don't prevent default on UI elements
-    const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('.leaderboard') || 
-        target.closest('.settings-modal') || target.closest('.shop-modal')) {
+    // Allow normal touch behavior for UI elements
+    if (isUIElement(e.target as HTMLElement)) {
       return;
     }
     
@@ -192,13 +238,11 @@ export const useWorldControls = (
         updateMobileCursor();
       });
     }
-  }, [worldPosition, setWorldPosition, resetAFKTimer, updateMobileCursor, scheduleUpdate]);
+  }, [worldPosition, setWorldPosition, resetAFKTimer, updateMobileCursor, scheduleUpdate, isUIElement]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    // Don't prevent default on UI elements
-    const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('.leaderboard') || 
-        target.closest('.settings-modal') || target.closest('.shop-modal')) {
+    // Allow normal touch behavior for UI elements
+    if (isUIElement(e.target as HTMLElement)) {
       return;
     }
     
@@ -222,7 +266,7 @@ export const useWorldControls = (
       setIsPanning(false);
       updateMobileCursor();
     }
-  }, [setIsPanning, onCursorClick, updateMobileCursor]);
+  }, [setIsPanning, onCursorClick, updateMobileCursor, isUIElement]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -258,7 +302,9 @@ export const useWorldControls = (
     };
 
     const handleGesture = (e: any) => {
-      e.preventDefault();
+      if (!isUIElement(e.target as HTMLElement)) {
+        e.preventDefault();
+      }
     };
 
     document.addEventListener('wheel', handleWheel, { passive: false });
@@ -272,5 +318,5 @@ export const useWorldControls = (
       document.removeEventListener('gesturechange', handleGesture);
       document.removeEventListener('gestureend', handleGesture);
     };
-  }, []);
+  }, [isUIElement]);
 };
