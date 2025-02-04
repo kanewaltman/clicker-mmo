@@ -46,99 +46,93 @@ export const useCursorSync = (
           y: y - worldPosition.y,
           username,
           emoji: cursorEmoji,
-          points: resources
+          points: resources,
+          isAFK
         }
-      });
+      }).catch(console.error);
     }
-  }, [userId, worldPosition, username, cursorEmoji, resources]);
+  }, [userId, worldPosition, username, cursorEmoji, resources, isAFK]);
 
   useEffect(() => {
-    if (isInitializedRef.current) return;
-    isInitializedRef.current = true;
+    if (isInitializedRef.current) {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+      }
+      isInitializedRef.current = false;
+    }
 
     const channel = supabase.channel('cursors', {
       config: {
-        broadcast: { self: false },
-        presence: { key: userId }
+        broadcast: { self: false }
       }
     });
 
+    channelRef.current = channel;
+
     channel
       .on('broadcast', { event: 'cursor' }, ({ payload }) => {
-        const cursor = payload as Omit<CursorWithInterpolation, 'currentX' | 'currentY' | 'targetX' | 'targetY' | 'lastUpdate' | 'isAFK'>;
+        if (payload.id === userId) return; // Ignore own cursor
+
         setCursors(prevCursors => {
           const now = Date.now();
-          const existingIndex = prevCursors.findIndex(c => c.id === cursor.id);
+          const existingIndex = prevCursors.findIndex(c => c.id === payload.id);
           
           if (existingIndex >= 0) {
             const updated = [...prevCursors];
             updated[existingIndex] = {
               ...updated[existingIndex],
-              ...cursor,
-              targetX: cursor.x,
-              targetY: cursor.y,
-              lastUpdate: now,
-              isAFK: false
+              ...payload,
+              targetX: payload.x,
+              targetY: payload.y,
+              lastUpdate: now
             };
             return updated;
           }
           
           return [...prevCursors, {
-            ...cursor,
-            currentX: cursor.x,
-            currentY: cursor.y,
-            targetX: cursor.x,
-            targetY: cursor.y,
-            lastUpdate: now,
-            isAFK: false
+            ...payload,
+            currentX: payload.x,
+            currentY: payload.y,
+            targetX: payload.x,
+            targetY: payload.y,
+            lastUpdate: now
           }];
         });
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          channelRef.current = channel;
-        }
       });
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+    // Subscribe to the channel
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        isInitializedRef.current = true;
       }
-      channel.unsubscribe();
-    };
-  }, [userId]);
+    });
 
-  useEffect(() => {
     const animate = () => {
-      const now = Date.now();
-      
       setCursors(prevCursors => {
-        const activeCursors = prevCursors.filter(
-          cursor => now - cursor.lastUpdate < 30000
-        );
-        
-        if (activeCursors.length === prevCursors.length) {
-          return prevCursors;
-        }
-        
-        return activeCursors.map(cursor => ({
-          ...cursor,
-          currentX: cursor.currentX + (cursor.targetX - cursor.currentX) * INTERPOLATION_SPEED,
-          currentY: cursor.currentY + (cursor.targetY - cursor.currentY) * INTERPOLATION_SPEED,
-          isAFK: now - cursor.lastUpdate > 5000
-        }));
+        const now = Date.now();
+        return prevCursors
+          .filter(cursor => now - cursor.lastUpdate < 30000)
+          .map(cursor => ({
+            ...cursor,
+            currentX: cursor.currentX + (cursor.targetX - cursor.currentX) * INTERPOLATION_SPEED,
+            currentY: cursor.currentY + (cursor.targetY - cursor.currentY) * INTERPOLATION_SPEED
+          }));
       });
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
 
     animationFrameRef.current = requestAnimationFrame(animate);
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+      }
     };
-  }, []);
+  }, [userId]);
 
   return { cursors, updateCursorPosition };
 };

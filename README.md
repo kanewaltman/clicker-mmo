@@ -184,4 +184,55 @@ The game implements a robust resource gathering system with the following featur
    };
    ```
 
-[Rest of the README remains unchanged...]
+### 🎮 Realtime Cursor Synchronization
+
+The game features a sophisticated cursor synchronization system that enables players to see each other's movements in real-time:
+
+1. **Broadcast System**
+   - Optimized cursor position updates using throttling (50ms intervals)
+   - Efficient payload structure to minimize network traffic
+   - Automatic cleanup of disconnected cursors
+
+2. **Interpolation**
+   - Smooth cursor movement using linear interpolation
+   - 60fps animation using requestAnimationFrame
+   - Configurable interpolation speed for different network conditions
+
+3. **State Management**
+   ```typescript
+   // Cursor state interface
+   interface CursorWithInterpolation {
+     id: string;
+     x: number;
+     y: number;
+     username: string;
+     emoji: string;
+     points: number;
+     currentX: number;
+     currentY: number;
+     targetX: number;
+     targetY: number;
+     lastUpdate: number;
+     isAFK: boolean;
+   }
+   ```
+
+4. **Channel Management**
+   - Automatic channel subscription and cleanup
+   - Error handling for network issues
+   - Memory leak prevention
+   - Proper cleanup on component unmount
+
+5. **Performance Features**
+   - Efficient cursor filtering (remove inactive after 30s)
+   - Optimized state updates using React's batch updates
+   - Minimal re-renders through proper dependency management
+   - Automatic AFK detection and status broadcasting
+
+6. **Implementation Details**
+   - Uses Supabase Realtime channels for WebSocket communication
+   - Implements broadcast pattern to minimize server load
+   - Handles edge cases like self-cursor filtering
+   - Maintains smooth animations even under network latency
+
+The cursor sync system is implemented in `src/components/world/hooks/useCursorSync.ts` and provides a robust foundation for real-time multiplayer interactions.
