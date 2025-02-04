@@ -9,6 +9,7 @@ import { PlayerCursor } from './world/PlayerCursor';
 import { TownCenter } from './world/TownCenter';
 import { Leaderboard } from './world/Leaderboard';
 import { AllTimeLeaderboard } from './world/AllTimeLeaderboard';
+import { MobileMenu } from './MobileMenu';
 import { useAFKDetection } from './world/hooks/useAFKDetection';
 import { useCursorSync } from './world/hooks/useCursorSync';
 import { useWorldControls } from './world/hooks/useWorldControls';
@@ -20,7 +21,7 @@ import {
 } from './world/constants';
 import type { Structure as StructureType, WorldResource } from '../store/gameStore';
 
-export const World: React.FC = () => {
+const World: React.FC = () => {
   const initRef = useRef(false);
   const userId = useRef(crypto.randomUUID()).current;
   const gameStore = useGameStore();
@@ -298,6 +299,8 @@ export const World: React.FC = () => {
     return Array.from(new Map(gameStore.worldResources.map(r => [r.id, r])).values());
   }, [gameStore.worldResources]);
 
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
   return (
     <>
       {isAFK && (
@@ -309,59 +312,70 @@ export const World: React.FC = () => {
         </div>
       )}
 
-      <div className="absolute top-4 right-4 z-10">
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="bg-gray-800 p-2 rounded-full hover:bg-gray-700 transition-colors"
-        >
-          <Settings className="text-white" size={24} />
-        </button>
-      </div>
-
-      <AllTimeLeaderboard />
-
-      <Leaderboard
-        position={leaderboardPosition}
-        players={topPlayers}
-        currentUserId={userId}
-        onMouseDown={handleLeaderboardMouseDown}
-      />
-
-      <div className="absolute bottom-4 left-4 z-10 flex gap-2">
-        <button
-          onClick={() => {
-            if (gameStore.resources > 0) {
-              gameStore.teleportToCastle();
-              resetAFKTimer();
-            }
-          }}
-          className={`px-4 py-2 rounded flex items-center gap-2 ${
-            gameStore.resources > 0 
-              ? 'bg-purple-600 hover:bg-purple-700' 
-              : 'bg-gray-600 cursor-not-allowed'
-          } text-white transition-colors group relative`}
-          disabled={gameStore.resources === 0}
-        >
-          <Home size={18} />
-          Return
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block whitespace-nowrap">
-            <span className="text-xs text-yellow-400 bg-black/50 px-2 py-1 rounded">
-              💰 {Math.floor(gameStore.resources * 0.5)}
-            </span>
+      {!isMobile && (
+        <>
+          <div className="absolute top-4 right-4 z-10">
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="bg-gray-800 p-2 rounded-full hover:bg-gray-700 transition-colors"
+            >
+              <Settings className="text-white" size={24} />
+            </button>
           </div>
-        </button>
 
-        {gameStore.inventory.pickaxes > 0 && (
-          <button
-            onClick={() => setPlacingStructure(!placingStructure)}
-            className={`px-4 py-2 rounded ${
-              placingStructure ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'
-            } text-white transition-colors`}
-          >
-            {placingStructure ? 'Cancel' : 'Place Pickaxe'} ({gameStore.inventory.pickaxes})
-          </button>
-        )}
-      </div>
+          <AllTimeLeaderboard />
+
+          <Leaderboard
+            position={leaderboardPosition}
+            players={topPlayers}
+            currentUserId={userId}
+            onMouseDown={handleLeaderboardMouseDown}
+          />
+
+          <div className="absolute bottom-4 left-4 z-10 flex gap-2">
+            <button
+              onClick={() => {
+                if (gameStore.resources > 0) {
+                  gameStore.teleportToCastle();
+                  resetAFKTimer();
+                }
+              }}
+              className={`px-4 py-2 rounded flex items-center gap-2 ${
+                gameStore.resources > 0 
+                  ? 'bg-purple-600 hover:bg-purple-700' 
+                  : 'bg-gray-600 cursor-not-allowed'
+              } text-white transition-colors group relative`}
+              disabled={gameStore.resources === 0}
+            >
+              <Home size={18} />
+              Return
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block whitespace-nowrap">
+                <span className="text-xs text-yellow-400 bg-black/50 px-2 py-1 rounded">
+                  💰 {Math.floor(gameStore.resources * 0.5)}
+                </span>
+              </div>
+            </button>
+
+            {gameStore.inventory.pickaxes > 0 && (
+              <button
+                onClick={() => setPlacingStructure(!placingStructure)}
+                className={`px-4 py-2 rounded ${
+                  placingStructure ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'
+                } text-white transition-colors`}
+              >
+                {placingStructure ? 'Cancel' : 'Place Pickaxe'} ({gameStore.inventory.pickaxes})
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {isMobile && (
+        <MobileMenu
+          onOpenShop={() => setIsShopOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      )}
 
       <div 
         className="relative w-full h-full overflow-hidden bg-gray-900 game-world"
@@ -373,7 +387,7 @@ export const World: React.FC = () => {
           radius={TOWN_RADIUS}
           worldPosition={gameStore.worldPosition}
           onClick={handleCastleClick}
-          isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+          isMobile={isMobile}
           isInCenter={isObjectInCenter(TOWN_CENTER.x, TOWN_CENTER.y, 48)}
         />
 
@@ -400,7 +414,7 @@ export const World: React.FC = () => {
               key={resource.id}
               resource={resource}
               onResourceClick={handleResourceClick}
-              isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+              isMobile={isMobile}
               isInCenter={isObjectInCenter(resource.position.x, resource.position.y)}
             />
           ))}
@@ -411,7 +425,7 @@ export const World: React.FC = () => {
               structure={structure}
               onMouseDown={handleStructureMouseDown}
               maxHealth={STRUCTURE_MAX_HEALTH}
-              isMobile={/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}
+              isMobile={isMobile}
               isInCenter={isObjectInCenter(structure.position.x, structure.position.y)}
             />
           ))}
@@ -436,3 +450,7 @@ export const World: React.FC = () => {
     </>
   );
 };
+
+export default World;
+
+export { World }
