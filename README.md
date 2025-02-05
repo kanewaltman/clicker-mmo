@@ -109,7 +109,11 @@ The game implements sophisticated interaction systems for both desktop and mobil
 
 #### 🔄 Shared Systems
 1. **State Management**
-   - Centralized game state
+   - Centralized game state using Zustand
+   - Modular store architecture:
+     - `userSlice`: User settings, preferences, and progress
+     - `worldSlice`: World position, resources, and resource management
+     - `structureSlice`: Structure placement, management, and inventory
    - Real-time multiplayer synchronization
    - Optimistic updates for responsiveness
    - Automatic state recovery
