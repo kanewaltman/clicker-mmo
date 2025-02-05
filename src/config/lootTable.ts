@@ -61,13 +61,13 @@ export const SPAWN_AREA = {
   maxY: 500,
   minDistanceFromCenter: 200, // Castle's no-spawn radius
   gridSize: 100, // Size of each grid cell for density calculation
-  maxAttemptsPerSpawn: 15, // Increased attempts for better positioning
-  minSpacing: 50, // Minimum spacing between any resources
+  maxAttemptsPerSpawn: 30, // Increased attempts for better positioning
+  minSpacing: 100, // Increased minimum spacing between resources
   clusterChance: 0.3, // 30% chance to create a cluster
-  clusterRadius: 120, // Radius for resource clusters (reduced from 200)
-  clusterMinSpacing: 80, // Minimum spacing within clusters
+  clusterRadius: 150, // Increased radius for resource clusters
+  clusterMinSpacing: 120, // Increased minimum spacing within clusters
   maxClusterSize: 5, // Maximum resources in a cluster
-  spawnRadius: 450 // Visual indicator for spawn area (slightly less than world bounds)
+  spawnRadius: 450 // Visual indicator for spawn area
 };
 
 interface ResourceWithType extends WorldResource {
@@ -111,7 +111,7 @@ function calculateDensity(x: number, y: number, resources: { position: { x: numb
 // Get a random position near another position with jitter
 function getRandomNearbyPosition(baseX: number, baseY: number, radius: number, minSpacing: number): { x: number; y: number } {
   let attempts = 0;
-  const maxAttempts = 10;
+  const maxAttempts = 20; // Increased attempts for better positioning
   
   while (attempts < maxAttempts) {
     const angle = Math.random() * Math.PI * 2;
@@ -124,7 +124,8 @@ function getRandomNearbyPosition(baseX: number, baseY: number, radius: number, m
     const distanceFromCenter = Math.sqrt(x * x + y * y);
     if (x >= SPAWN_AREA.minX && x <= SPAWN_AREA.maxX && 
         y >= SPAWN_AREA.minY && y <= SPAWN_AREA.maxY &&
-        distanceFromCenter <= SPAWN_AREA.spawnRadius) {
+        distanceFromCenter <= SPAWN_AREA.spawnRadius &&
+        distanceFromCenter >= SPAWN_AREA.minDistanceFromCenter) {
       return { x, y };
     }
     attempts++;
@@ -200,23 +201,16 @@ export function getRandomSpawnPosition(existingResources: ResourceWithType[]): {
   let bestScore = -Infinity;
   
   for (let attempt = 0; attempt < SPAWN_AREA.maxAttemptsPerSpawn; attempt++) {
-    let x: number;
-    let y: number;
-    let distance: number;
-    
-    do {
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * SPAWN_AREA.spawnRadius;
-      x = Math.cos(angle) * r;
-      y = Math.sin(angle) * r;
-      distance = Math.sqrt(x * x + y * y);
-    } while (distance < SPAWN_AREA.minDistanceFromCenter);
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * (SPAWN_AREA.spawnRadius - SPAWN_AREA.minDistanceFromCenter) + SPAWN_AREA.minDistanceFromCenter;
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r;
     
     const minDistance = getMinDistanceToResources(x, y, existingResources);
     const density = calculateDensity(x, y, existingResources);
     
     // Score based on spacing and density
-    const score = minDistance - (density * 15);
+    const score = minDistance - (density * 20);
     
     if (score > bestScore && minDistance >= SPAWN_AREA.minSpacing) {
       bestScore = score;
@@ -230,17 +224,20 @@ export function getRandomSpawnPosition(existingResources: ResourceWithType[]): {
     let y: number;
     let distance: number;
     let minDistance: number;
+    let attempts = 0;
     
     do {
       const angle = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * SPAWN_AREA.spawnRadius;
+      const r = Math.sqrt(Math.random()) * (SPAWN_AREA.spawnRadius - SPAWN_AREA.minDistanceFromCenter) + SPAWN_AREA.minDistanceFromCenter;
       x = Math.cos(angle) * r;
       y = Math.sin(angle) * r;
       distance = Math.sqrt(x * x + y * y);
       minDistance = getMinDistanceToResources(x, y, existingResources);
+      attempts++;
     } while (
-      distance < SPAWN_AREA.minDistanceFromCenter || 
-      minDistance < SPAWN_AREA.minSpacing
+      (distance < SPAWN_AREA.minDistanceFromCenter || 
+      minDistance < SPAWN_AREA.minSpacing) &&
+      attempts < 50
     );
     
     bestPosition = { x, y };

@@ -2,9 +2,16 @@
 export const RESOURCE_BALANCE = {
   targetResourceCount: 20, // Total number of resources to maintain
   maxDistance: 800, // Maximum distance from castle (0,0)
-  checkInterval: 10000, // Increased to 10 seconds to reduce check frequency
-  spawnBatchSize: 2, // Reduced batch size to prevent large spawns
-  densityAllowance: 0.3, // Increased to 30% variance to reduce spawn/despawn cycles
+  checkInterval: 2000, // Check every 2 seconds
+  spawnBatchSize: 3, // Spawn up to 3 resources at a time
+  densityAllowance: 0.2, // 20% variance allowed
+  // Dynamic spawn rate based on deficit
+  spawnRateMultiplier: (currentCount: number, targetCount: number) => {
+    const deficit = targetCount - currentCount;
+    if (deficit <= 0) return 1;
+    // Increase spawn rate when deficit is larger
+    return Math.min(5, 1 + (deficit / targetCount));
+  },
   // Distribution of resource types (must sum to 1)
   distribution: {
     common: 0.5,    // 50% common
@@ -21,6 +28,7 @@ export function calculateResourceRange(resources: { position: { x: number; y: nu
   maxAcceptable: number;
   deficit: number;
   excess: number;
+  spawnRate: number;
 } {
   // Only count resources within maxDistance
   const inRange = resources.filter(resource => {
@@ -39,19 +47,16 @@ export function calculateResourceRange(resources: { position: { x: number; y: nu
   const minAcceptable = RESOURCE_BALANCE.targetResourceCount - allowance;
   const maxAcceptable = RESOURCE_BALANCE.targetResourceCount + allowance;
 
+  // Calculate spawn rate multiplier
+  const spawnRate = RESOURCE_BALANCE.spawnRateMultiplier(inRange, RESOURCE_BALANCE.targetResourceCount);
+
   return {
     inRange,
     minAcceptable,
     maxAcceptable,
-    // Add gradual deficit/excess calculation
-    deficit: Math.min(
-      RESOURCE_BALANCE.spawnBatchSize,
-      Math.max(0, minAcceptable - inRange)
-    ),
-    excess: Math.min(
-      RESOURCE_BALANCE.spawnBatchSize,
-      Math.max(0, inRange - maxAcceptable)
-    )
+    deficit: Math.max(0, minAcceptable - inRange),
+    excess: Math.max(0, inRange - maxAcceptable),
+    spawnRate
   };
 }
 

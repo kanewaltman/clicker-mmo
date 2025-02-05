@@ -4,7 +4,7 @@ import { RESOURCE_BALANCE, calculateResourceRange, getResourceTypeByProbability 
 import { getRandomSpawnPosition, LOOT_TABLE } from '../../config/lootTable';
 
 export async function balanceResources(currentResources: WorldResource[]) {
-  const { deficit, excess } = calculateResourceRange(currentResources);
+  const { deficit, excess, spawnRate } = calculateResourceRange(currentResources);
   
   if (excess > 0) {
     const resourcesToRemove = currentResources
@@ -33,10 +33,15 @@ export async function balanceResources(currentResources: WorldResource[]) {
       }
     }
   } else if (deficit > 0) {
-    const batchSize = Math.min(deficit, RESOURCE_BALANCE.spawnBatchSize);
+    // Adjust batch size based on spawn rate
+    const adjustedBatchSize = Math.min(
+      deficit,
+      Math.ceil(RESOURCE_BALANCE.spawnBatchSize * spawnRate)
+    );
+    
     const spawnPromises = [];
 
-    for (let i = 0; i < batchSize; i++) {
+    for (let i = 0; i < adjustedBatchSize; i++) {
       const rarity = getResourceTypeByProbability();
       const resource = LOOT_TABLE.find(r => r.rarity === rarity);
       if (!resource) continue;
