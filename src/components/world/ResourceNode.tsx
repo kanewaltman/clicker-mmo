@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { WorldResource } from '../../store/gameStore';
 import { RARITY_COLORS, RARITY_SCALES } from './constants';
 
@@ -15,17 +15,58 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
   isMobile,
   isInCenter
 }) => {
+  const [isHarvesting, setIsHarvesting] = useState(false);
+
+  // Reset harvesting animation after a short delay
+  useEffect(() => {
+    if (isHarvesting) {
+      const timer = setTimeout(() => {
+        setIsHarvesting(false);
+      }, 200); // Duration matches the CSS transition
+      return () => clearTimeout(timer);
+    }
+  }, [isHarvesting]);
+
+  // Watch for changes in resource health to trigger harvesting animation
+  useEffect(() => {
+    setIsHarvesting(true);
+  }, [resource.currentHealth]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    // For desktop, trigger on direct click
+    // For mobile, only trigger if the resource is in the center
+    if (!isMobile || (isMobile && isInCenter)) {
+      onResourceClick(resource);
+    }
+  };
+
   return (
     <div
-      className={`absolute select-none transform hover:scale-110 transition-transform cursor-pointer active:scale-95 ${RARITY_SCALES[resource.rarity]} group`}
+      className={`
+        absolute select-none transform cursor-pointer
+        ${RARITY_SCALES[resource.rarity]}
+        group
+      `}
       style={{ 
         left: resource.position.x, 
         top: resource.position.y,
-        fontSize: '2rem'
+        fontSize: '2rem',
+        transform: `scale(${
+          isHarvesting ? 0.95 : 
+          (!isMobile && !isHarvesting) ? 1 : 
+          (isMobile && isInCenter) ? 1.1 : 
+          1
+        })`,
+        transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
       }}
-      onClick={() => onResourceClick(resource)}
+      onClick={handleClick}
     >
-      <div className="relative">
+      <div 
+        className={`
+          relative transform transition-transform duration-200
+          ${!isMobile ? 'hover:scale-110' : ''}
+        `}
+      >
         <div className={RARITY_COLORS[resource.rarity]}>
           {resource.emoji}
         </div>
