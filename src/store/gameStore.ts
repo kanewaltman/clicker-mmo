@@ -119,21 +119,18 @@ async function balanceResources() {
   const { deficit, excess } = calculateResourceRange(store.worldResources);
   
   if (excess > 0) {
-    // Remove excess resources, prioritizing oldest and furthest from center
     const resourcesToRemove = store.worldResources
       .sort((a, b) => {
-        // Sort by distance from center (descending)
         const distanceA = Math.sqrt(Math.pow(a.position.x, 2) + Math.pow(a.position.y, 2));
         const distanceB = Math.sqrt(Math.pow(b.position.x, 2) + Math.pow(b.position.y, 2));
         
         if (Math.abs(distanceA - distanceB) > 50) {
-          return distanceB - distanceA; // Remove furthest first
+          return distanceB - distanceA;
         }
         
-        // If distances are similar, use creation time
         const timeA = a.created_at ? new Date(a.created_at).getTime() : Date.now();
         const timeB = b.created_at ? new Date(b.created_at).getTime() : Date.now();
-        return timeA - timeB; // Remove oldest first
+        return timeA - timeB;
       })
       .slice(0, excess);
 
@@ -148,7 +145,6 @@ async function balanceResources() {
       }
     }
   } else if (deficit > 0) {
-    // Add new resources
     const batchSize = Math.min(deficit, RESOURCE_BALANCE.spawnBatchSize);
     const spawnPromises = [];
 
@@ -458,7 +454,6 @@ const useGameStore = create<GameState>()(
 
       placeStructure: async (structure) => {
         try {
-          // Check if structure is within castle radius
           const distance = Math.sqrt(
             Math.pow(structure.position.x, 2) + 
             Math.pow(structure.position.y, 2)
@@ -609,50 +604,61 @@ const useGameStore = create<GameState>()(
             return;
           }
 
-          const newHealth = Math.max(0, currentResource.current_health - damage);
+          const oldHealth = currentResource.current_health;
+          const newHealth = Math.max(0, oldHealth - damage);
 
           if (newHealth <= 0) {
-            const { error: deleteError } = await supabase
+            const { data: deletedResource, error: deleteError } = await supabase
               .from('resources')
               .delete()
-              .eq('id', resourceId);
+              .eq('id', resourceId)
+              .eq('current_health', oldHealth)
+              .select()
+              .single();
 
             if (deleteError) {
               console.error('Error deleting resource:', deleteError);
               return;
             }
 
-            set(state => {
-              const newState = {
-                resources: state.resources + currentResource.value_per_click
-              };
-              if (state.user) {
-                debouncedSave({ ...state, ...newState });
-              }
-              return newState;
-            });
+            if (deletedResource) {
+              set(state => {
+                const newState = {
+                  resources: state.resources + currentResource.value_per_click
+                };
+                if (state.user) {
+                  debouncedSave({ ...state, ...newState });
+                }
+                return newState;
+              });
 
-            await spawnNewResource();
+              await spawnNewResource();
+            }
           } else {
-            const { error: updateError } = await supabase
+            const { data: updatedResource, error: updateError } = await supabase
               .from('resources')
               .update({ current_health: newHealth })
-              .eq('id', resourceId);
+              .eq('id', resourceId)
+              .eq('current_health', oldHealth)
+              .select()
+              .single();
 
             if (updateError) {
               console.error('Error updating resource:', updateError);
               return;
             }
 
-            set(state => {
-              const newState = {
-                resources: state.resources + currentResource.value_per_click
-              };
-              if (state.user) {
-                debouncedSave({ ...state, ...newState });
-              }
-              return newState;
-            });
+            if (updatedResource && updatedResource.current_health < oldHealth) {
+              set(state => {
+                const newState = {
+                  resources: state.resources + currentResource.value_per_click
+                };
+                if (state.user) {
+                  debouncedSave({ ...state, ...newState });
+                }
+                return newState;
+              });
+            }
           }
         } catch (error) {
           console.error('Error in damageResource:', error);
@@ -805,7 +811,6 @@ function startStructureCleanup() {
           .delete()
           .eq('id', structure.id);
 
-        // Refund the pickaxe to the owner
         if (structure.owner === store.user?.id) {
           set(state => ({
             inventory: {
@@ -818,15 +823,13 @@ function startStructureCleanup() {
         console.error('Error cleaning up structure:', error);
       }
     }
-  }, 5000); // Check every 5 seconds
+  }, 5000);
 
-  // Cleanup on window unload
   window.addEventListener('unload', () => {
     clearInterval(cleanupInterval);
   });
 }
 
-// Start the cleanup when the store is initialized
 startStructureCleanup();
 
 supabase.auth.onAuthStateChange((event, session) => {
