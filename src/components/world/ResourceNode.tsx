@@ -16,17 +16,10 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
   isInCenter
 }) => {
   const [isHarvesting, setIsHarvesting] = useState(false);
-  const [currentHealth, setCurrentHealth] = useState(resource.currentHealth);
   const animationTimeoutRef = useRef<number>();
   const lastHealthRef = useRef(resource.currentHealth);
   const lastClickTimeRef = useRef(0);
   const lastClickHealthRef = useRef(resource.currentHealth);
-
-  // Sync health state when resource health changes
-  useEffect(() => {
-    setCurrentHealth(resource.currentHealth);
-    lastHealthRef.current = resource.currentHealth;
-  }, [resource.currentHealth]);
 
   const triggerHarvestAnimation = useCallback(() => {
     if (animationTimeoutRef.current) {
@@ -64,22 +57,26 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
         now - lastClickTimeRef.current > 500) {
       triggerHarvestAnimation();
     }
+    lastHealthRef.current = resource.currentHealth;
   }, [resource.currentHealth, triggerHarvestAnimation]);
+
+  const handleResourceAction = useCallback(() => {
+    lastClickTimeRef.current = Date.now();
+    lastClickHealthRef.current = resource.currentHealth - 10; // Predict the new health
+    onResourceClick(resource);
+    triggerHarvestAnimation();
+  }, [resource, onResourceClick, triggerHarvestAnimation]);
 
   const handleClick = (e: React.MouseEvent) => {
     // For desktop, trigger on direct click
+    if (!isMobile) {
+      handleResourceAction();
+    }
     // For mobile, only trigger if the resource is in the center
-    if (!isMobile || (isMobile && isInCenter)) {
-      lastClickTimeRef.current = Date.now();
-      lastClickHealthRef.current = resource.currentHealth - 10; // Predict the new health
-      setCurrentHealth(prev => Math.max(0, prev - 10)); // Update local state immediately
-      onResourceClick(resource);
-      triggerHarvestAnimation();
+    else if (isMobile && isInCenter) {
+      handleResourceAction();
     }
   };
-
-  // Calculate health percentage for the health bar
-  const healthPercentage = Math.max(0, Math.min(100, (currentHealth / resource.maxHealth) * 100));
 
   return (
     <div
@@ -121,7 +118,7 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
               {resource.rarity} {resource.type}
             </div>
             <div className="text-gray-300">
-              HP: {Math.max(0, currentHealth)}/{resource.maxHealth}
+              HP: {resource.currentHealth}/{resource.maxHealth}
             </div>
             <div className="text-yellow-400">
               +{resource.valuePerClick} 💰 per click
@@ -134,7 +131,7 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
           <div
             className="absolute inset-0 bg-green-500 rounded-full transition-transform duration-200 ease-out origin-left"
             style={{ 
-              transform: `scaleX(${healthPercentage / 100})` 
+              transform: `scaleX(${resource.currentHealth / resource.maxHealth})` 
             }}
           />
         </div>
