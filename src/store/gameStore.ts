@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '../lib/supabase';
 import { getRandomSpawnPosition, selectRandomResource, LOOT_TABLE } from '../config/lootTable';
-import { RESOURCE_BALANCE, calculateResourceDeficit, getResourceTypeByProbability } from '../config/resourceBalance';
+import { RESOURCE_BALANCE, calculateResourceRange, getResourceTypeByProbability } from '../config/resourceBalance';
 
 interface GameState {
   worldPosition: { x: number; y: number };
@@ -70,12 +70,14 @@ export interface WorldResource {
   currentHealth: number;
   valuePerClick: number;
   emoji: string;
+  created_at?: string;
 }
 
 const PICKAXE_COST = 100;
 const STRUCTURE_MAX_HEALTH = 1000;
 const RETRIEVE_COST = 50;
 const DEFAULT_AFK_TIMEOUT = 5000;
+const TOWN_RADIUS = 100;
 
 let isSpawning = false;
 let resourceChannel: any = null;
@@ -108,14 +110,45 @@ const transformDatabaseResource = (dbResource: any): WorldResource => ({
   maxHealth: dbResource.max_health,
   currentHealth: dbResource.current_health,
   valuePerClick: dbResource.value_per_click,
-  emoji: dbResource.emoji
+  emoji: dbResource.emoji,
+  created_at: dbResource.created_at
 });
 
 async function balanceResources() {
   const store = useGameStore.getState();
-  const deficit = calculateResourceDeficit(store.worldResources, RESOURCE_BALANCE.maxDistance);
+  const { deficit, excess } = calculateResourceRange(store.worldResources);
   
-  if (deficit > 0) {
+  if (excess > 0) {
+    // Remove excess resources, prioritizing oldest and furthest from center
+    const resourcesToRemove = store.worldResources
+      .sort((a, b) => {
+        // Sort by distance from center (descending)
+        const distanceA = Math.sqrt(Math.pow(a.position.x, 2) + Math.pow(a.position.y, 2));
+        const distanceB = Math.sqrt(Math.pow(b.position.x, 2) + Math.pow(b.position.y, 2));
+        
+        if (Math.abs(distanceA - distanceB) > 50) {
+          return distanceB - distanceA; // Remove furthest first
+        }
+        
+        // If distances are similar, use creation time
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : Date.now();
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : Date.now();
+        return timeA - timeB; // Remove oldest first
+      })
+      .slice(0, excess);
+
+    for (const resource of resourcesToRemove) {
+      try {
+        await supabase
+          .from('resources')
+          .delete()
+          .eq('id', resource.id);
+      } catch (error) {
+        console.error('Error removing excess resource:', error);
+      }
+    }
+  } else if (deficit > 0) {
+    // Add new resources
     const batchSize = Math.min(deficit, RESOURCE_BALANCE.spawnBatchSize);
     const spawnPromises = [];
 
@@ -137,7 +170,8 @@ async function balanceResources() {
             max_health: resource.stats.maxHealth,
             current_health: resource.stats.maxHealth,
             value_per_click: resource.stats.valuePerClick,
-            emoji: resource.emoji
+            emoji: resource.emoji,
+            created_at: new Date().toISOString()
           })
           .select()
       );
@@ -424,6 +458,17 @@ const useGameStore = create<GameState>()(
 
       placeStructure: async (structure) => {
         try {
+          // Check if structure is within castle radius
+          const distance = Math.sqrt(
+            Math.pow(structure.position.x, 2) + 
+            Math.pow(structure.position.y, 2)
+          );
+          
+          if (distance <= TOWN_RADIUS) {
+            console.log('Cannot place structures within castle radius');
+            return;
+          }
+
           const { data: newStructure, error } = await supabase
             .from('structures')
             .insert({
@@ -741,6 +786,48 @@ const useGameStore = create<GameState>()(
     }
   )
 );
+
+function startStructureCleanup() {
+  const cleanupInterval = setInterval(async () => {
+    const store = useGameStore.getState();
+    const structuresInRadius = store.structures.filter(structure => {
+      const distance = Math.sqrt(
+        Math.pow(structure.position.x, 2) + 
+        Math.pow(structure.position.y, 2)
+      );
+      return distance <= TOWN_RADIUS;
+    });
+
+    for (const structure of structuresInRadius) {
+      try {
+        await supabase
+          .from('structures')
+          .delete()
+          .eq('id', structure.id);
+
+        // Refund the pickaxe to the owner
+        if (structure.owner === store.user?.id) {
+          set(state => ({
+            inventory: {
+              ...state.inventory,
+              pickaxes: state.inventory.pickaxes + 1
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('Error cleaning up structure:', error);
+      }
+    }
+  }, 5000); // Check every 5 seconds
+
+  // Cleanup on window unload
+  window.addEventListener('unload', () => {
+    clearInterval(cleanupInterval);
+  });
+}
+
+// Start the cleanup when the store is initialized
+startStructureCleanup();
 
 supabase.auth.onAuthStateChange((event, session) => {
   const store = useGameStore.getState();

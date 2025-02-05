@@ -13,6 +13,7 @@ import { MobileMenu } from './MobileMenu';
 import { useAFKDetection } from './world/hooks/useAFKDetection';
 import { useCursorSync } from './world/hooks/useCursorSync';
 import { useWorldControls } from './world/hooks/useWorldControls';
+import { SpawnDebug } from './world/SpawnDebug';
 import {
   TOWN_CENTER,
   TOWN_RADIUS,
@@ -41,6 +42,7 @@ const World: React.FC = () => {
   });
   const [isDraggingLeaderboard, setIsDraggingLeaderboard] = useState(false);
   const [leaderboardDragOffset, setLeaderboardDragOffset] = useState({ x: 0, y: 0 });
+  const [showSpawnDebug, setShowSpawnDebug] = useState(false);
 
   useEffect(() => {
     if (!initRef.current) {
@@ -57,6 +59,18 @@ const World: React.FC = () => {
       };
       initializeGameState();
     }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        e.preventDefault();
+        setShowSpawnDebug(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
   const resetAFKTimer = useAFKDetection(gameStore.afkTimeout, setIsAFK);
@@ -381,6 +395,10 @@ const World: React.FC = () => {
         className="relative w-full h-full overflow-hidden bg-gray-900 game-world"
         onClick={handlePlaceStructure}
       >
+        {showSpawnDebug && (
+          <SpawnDebug worldPosition={gameStore.worldPosition} />
+        )}
+
         <TownCenter
           x={TOWN_CENTER.x}
           y={TOWN_CENTER.y}
@@ -444,6 +462,15 @@ const World: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {isMobile && (
+        <button
+          onClick={() => setShowSpawnDebug(prev => !prev)}
+          className="fixed bottom-20 right-4 z-[100] w-14 h-14 bg-stone-900 rounded-full flex items-center justify-center shadow-lg hover:bg-stone-800 transition-colors md:hidden game-ui"
+        >
+          <span className="text-white text-2xl">🐞</span>
+        </button>
+      )}
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <Shop isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />

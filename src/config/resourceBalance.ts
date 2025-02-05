@@ -2,8 +2,9 @@
 export const RESOURCE_BALANCE = {
   targetResourceCount: 20, // Total number of resources to maintain
   maxDistance: 800, // Maximum distance from castle (0,0)
-  checkInterval: 5000, // How often to check/adjust resource count (ms)
-  spawnBatchSize: 3, // How many resources to spawn at once if below target
+  checkInterval: 10000, // Increased to 10 seconds to reduce check frequency
+  spawnBatchSize: 2, // Reduced batch size to prevent large spawns
+  densityAllowance: 0.3, // Increased to 30% variance to reduce spawn/despawn cycles
   // Distribution of resource types (must sum to 1)
   distribution: {
     common: 0.5,    // 50% common
@@ -13,19 +14,45 @@ export const RESOURCE_BALANCE = {
   }
 } as const;
 
-export function calculateResourceDeficit(
-  resources: { position: { x: number; y: number } }[],
-  maxDistance: number
-): number {
-  const inRangeCount = resources.filter(resource => {
+// Calculate the acceptable range for resources
+export function calculateResourceRange(resources: { position: { x: number; y: number } }[]): {
+  inRange: number;
+  minAcceptable: number;
+  maxAcceptable: number;
+  deficit: number;
+  excess: number;
+} {
+  // Only count resources within maxDistance
+  const inRange = resources.filter(resource => {
     const distance = Math.sqrt(
-      Math.pow(resource.position.x, 0) + 
-      Math.pow(resource.position.y, 0)
+      Math.pow(resource.position.x, 2) + 
+      Math.pow(resource.position.y, 2)
     );
-    return distance <= maxDistance;
+    return distance <= RESOURCE_BALANCE.maxDistance;
   }).length;
 
-  return Math.max(0, RESOURCE_BALANCE.targetResourceCount - inRangeCount);
+  // Calculate allowance with a minimum of 2 resources
+  const allowance = Math.max(
+    2,
+    Math.floor(RESOURCE_BALANCE.targetResourceCount * RESOURCE_BALANCE.densityAllowance)
+  );
+  const minAcceptable = RESOURCE_BALANCE.targetResourceCount - allowance;
+  const maxAcceptable = RESOURCE_BALANCE.targetResourceCount + allowance;
+
+  return {
+    inRange,
+    minAcceptable,
+    maxAcceptable,
+    // Add gradual deficit/excess calculation
+    deficit: Math.min(
+      RESOURCE_BALANCE.spawnBatchSize,
+      Math.max(0, minAcceptable - inRange)
+    ),
+    excess: Math.min(
+      RESOURCE_BALANCE.spawnBatchSize,
+      Math.max(0, inRange - maxAcceptable)
+    )
+  };
 }
 
 export function getResourceTypeByProbability(): 'common' | 'uncommon' | 'rare' | 'legendary' {
