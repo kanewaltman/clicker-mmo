@@ -282,4 +282,78 @@ The game features a sophisticated cursor synchronization system that enables pla
    - Handles edge cases like self-cursor filtering
    - Maintains smooth animations even under network latency
 
-The cursor sync system is implemented in `src/components/world/hooks/useCursorSync.ts` and provides a robust foundation for real-time multiplayer interactions.
+### 🐞 Debug Mode
+
+The game includes a comprehensive debug mode that can be accessed by pressing `F3` or using the debug button on mobile devices. This mode provides valuable insights into the game's resource spawning system and world boundaries.
+
+#### Features
+
+1. **Visual Indicators**
+   - World bounds (blue border)
+   - Spawn radius (green circle)
+   - No-spawn zone around castle (red circle)
+   - Cluster range visualization (yellow circle)
+   - Density grid overlay
+
+2. **Spawn Area Configuration**
+   - World Bounds: ±500px from center
+   - Spawn Radius: 450px
+   - No-Spawn Zone: 200px around castle
+   - Grid Size: 100px for density calculations
+
+3. **Resource Spacing**
+   - Minimum distance between resources: 50px
+   - Cluster minimum spacing: 80px
+   - Cluster radius: 120px
+
+4. **Cluster Settings**
+   - Spawn chance: 30%
+   - Maximum cluster size: 5 resources
+   - Type consistency within clusters
+
+5. **Debug Controls**
+   - Force spawn cluster button
+   - Real-time visualization updates
+   - Detailed spawn area metrics
+
+#### Implementation Details
+
+1. **Resource Placement**
+   - Smart positioning algorithm
+   - Density-based spawn distribution
+   - Cluster formation logic
+   - Collision prevention
+
+2. **Visual Debugging**
+   - Real-time overlay rendering
+   - Grid-based density visualization
+   - Interactive spawn testing
+   - Clear visual feedback
+
+3. **Debug Interface**
+   ```typescript
+   interface SpawnDebugProps {
+     worldPosition: { x: number; y: number };
+   }
+   ```
+
+4. **Configuration Constants**
+   ```typescript
+   const SPAWN_AREA = {
+     minX: -500,
+     maxX: 500,
+     minY: -500,
+     maxY: 500,
+     minDistanceFromCenter: 200,
+     gridSize: 100,
+     maxAttemptsPerSpawn: 15,
+     minSpacing: 50,
+     clusterChance: 0.3,
+     clusterRadius: 120,
+     clusterMinSpacing: 80,
+     maxClusterSize: 5,
+     spawnRadius: 450
+   };
+   ```
+
+The debug mode provides essential tools for understanding and testing the game's resource spawning mechanics, making it invaluable for development and testing.
