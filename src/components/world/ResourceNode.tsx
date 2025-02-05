@@ -16,10 +16,17 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
   isInCenter
 }) => {
   const [isHarvesting, setIsHarvesting] = useState(false);
+  const [currentHealth, setCurrentHealth] = useState(resource.currentHealth);
   const animationTimeoutRef = useRef<number>();
   const lastHealthRef = useRef(resource.currentHealth);
   const lastClickTimeRef = useRef(0);
   const lastClickHealthRef = useRef(resource.currentHealth);
+
+  // Sync health state when resource health changes
+  useEffect(() => {
+    setCurrentHealth(resource.currentHealth);
+    lastHealthRef.current = resource.currentHealth;
+  }, [resource.currentHealth]);
 
   const triggerHarvestAnimation = useCallback(() => {
     if (animationTimeoutRef.current) {
@@ -30,6 +37,15 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
     animationTimeoutRef.current = window.setTimeout(() => {
       setIsHarvesting(false);
     }, 200);
+  }, []);
+
+  // Cleanup animation timeouts
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Watch for health changes to trigger animation for other players' actions
@@ -48,7 +64,6 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
         now - lastClickTimeRef.current > 500) {
       triggerHarvestAnimation();
     }
-    lastHealthRef.current = resource.currentHealth;
   }, [resource.currentHealth, triggerHarvestAnimation]);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -57,10 +72,14 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
     if (!isMobile || (isMobile && isInCenter)) {
       lastClickTimeRef.current = Date.now();
       lastClickHealthRef.current = resource.currentHealth - 10; // Predict the new health
+      setCurrentHealth(prev => Math.max(0, prev - 10)); // Update local state immediately
       onResourceClick(resource);
       triggerHarvestAnimation();
     }
   };
+
+  // Calculate health percentage for the health bar
+  const healthPercentage = Math.max(0, Math.min(100, (currentHealth / resource.maxHealth) * 100));
 
   return (
     <div
@@ -102,7 +121,7 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
               {resource.rarity} {resource.type}
             </div>
             <div className="text-gray-300">
-              HP: {resource.currentHealth}/{resource.maxHealth}
+              HP: {Math.max(0, currentHealth)}/{resource.maxHealth}
             </div>
             <div className="text-yellow-400">
               +{resource.valuePerClick} 💰 per click
@@ -115,7 +134,7 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
           <div
             className="absolute inset-0 bg-green-500 rounded-full transition-transform duration-200 ease-out origin-left"
             style={{ 
-              transform: `scaleX(${resource.currentHealth / resource.maxHealth})` 
+              transform: `scaleX(${healthPercentage / 100})` 
             }}
           />
         </div>
