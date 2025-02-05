@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { WorldResource } from '../../store/gameStore';
 import { RARITY_COLORS, RARITY_SCALES } from './constants';
 
@@ -16,27 +16,49 @@ export const ResourceNode: React.FC<ResourceNodeProps> = ({
   isInCenter
 }) => {
   const [isHarvesting, setIsHarvesting] = useState(false);
+  const animationTimeoutRef = useRef<number>();
+  const lastHealthRef = useRef(resource.currentHealth);
+  const lastClickTimeRef = useRef(0);
+  const lastClickHealthRef = useRef(resource.currentHealth);
 
-  // Reset harvesting animation after a short delay
-  useEffect(() => {
-    if (isHarvesting) {
-      const timer = setTimeout(() => {
-        setIsHarvesting(false);
-      }, 200); // Duration matches the CSS transition
-      return () => clearTimeout(timer);
+  const triggerHarvestAnimation = useCallback(() => {
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
     }
-  }, [isHarvesting]);
-
-  // Watch for changes in resource health to trigger harvesting animation
-  useEffect(() => {
+    
     setIsHarvesting(true);
-  }, [resource.currentHealth]);
+    animationTimeoutRef.current = window.setTimeout(() => {
+      setIsHarvesting(false);
+    }, 200);
+  }, []);
+
+  // Watch for health changes to trigger animation for other players' actions
+  useEffect(() => {
+    // Skip if this is our own click (health matches our last click health)
+    if (resource.currentHealth === lastClickHealthRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    // Only trigger animation if:
+    // 1. Health decreased
+    // 2. It's been more than 500ms since our last click (to avoid double animation)
+    // 3. This isn't the same health value as our last click
+    if (resource.currentHealth < lastHealthRef.current && 
+        now - lastClickTimeRef.current > 500) {
+      triggerHarvestAnimation();
+    }
+    lastHealthRef.current = resource.currentHealth;
+  }, [resource.currentHealth, triggerHarvestAnimation]);
 
   const handleClick = (e: React.MouseEvent) => {
     // For desktop, trigger on direct click
     // For mobile, only trigger if the resource is in the center
     if (!isMobile || (isMobile && isInCenter)) {
+      lastClickTimeRef.current = Date.now();
+      lastClickHealthRef.current = resource.currentHealth - 10; // Predict the new health
       onResourceClick(resource);
+      triggerHarvestAnimation();
     }
   };
 

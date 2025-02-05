@@ -67,6 +67,11 @@ The game implements sophisticated interaction systems for both desktop and mobil
    - Visual feedback on resource hits
    - Automatic claim system with 5-second timeout
    - Concurrent gathering prevention
+   - Smart animation system:
+     - Tracks local vs remote gathering actions
+     - Prevents double animations on health updates
+     - Uses health prediction for smoother feedback
+     - Separate handling for player clicks and network updates
 
 4. **Structure Management**
    - Drag-and-drop structure placement
@@ -137,7 +142,49 @@ The game implements a robust resource gathering system with the following featur
    - Claims automatically expire after 5 seconds
    - Prevents multiple players from gathering the same resource
 
-2. **Gathering Logic**
+2. **Animation System**
+   ```typescript
+   // Resource animation with smart health tracking
+   const ResourceNode: React.FC<ResourceNodeProps> = ({ resource, onResourceClick }) => {
+     const [isHarvesting, setIsHarvesting] = useState(false);
+     const lastHealthRef = useRef(resource.currentHealth);
+     const lastClickTimeRef = useRef(0);
+     const lastClickHealthRef = useRef(resource.currentHealth);
+
+     // Trigger animation with cleanup
+     const triggerHarvestAnimation = useCallback(() => {
+       setIsHarvesting(true);
+       setTimeout(() => setIsHarvesting(false), 200);
+     }, []);
+
+     // Smart health change detection
+     useEffect(() => {
+       // Skip if this is our own click
+       if (resource.currentHealth === lastClickHealthRef.current) return;
+
+       const now = Date.now();
+       // Only animate if:
+       // 1. Health decreased
+       // 2. Not our recent click
+       // 3. Different from last click
+       if (resource.currentHealth < lastHealthRef.current && 
+           now - lastClickTimeRef.current > 500) {
+         triggerHarvestAnimation();
+       }
+       lastHealthRef.current = resource.currentHealth;
+     }, [resource.currentHealth]);
+
+     // Click handling with health prediction
+     const handleClick = () => {
+       lastClickTimeRef.current = Date.now();
+       lastClickHealthRef.current = resource.currentHealth - 10;
+       onResourceClick(resource);
+       triggerHarvestAnimation();
+     };
+   };
+   ```
+
+3. **Gathering Logic**
    ```typescript
    // Resource gathering with claim system
    const damageResource = async (resourceId: string, damage: number) => {
