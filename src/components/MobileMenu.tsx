@@ -1,5 +1,13 @@
-import React, { useRef, useCallback, useEffect } from 'react';
-import { MessageSquare } from 'lucide-react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
+import { 
+  LayoutGridIcon as GridFill,
+  UsersIcon as UsersFill,
+  GlobeIcon as GlobeFill,
+  TrophyIcon as TrophyFill,
+  SettingsIcon as SettingsFill,
+  MessageSquareIcon as MessageSquareFill,
+  ArrowLeftIcon
+} from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 
 interface MobileMenuProps {
@@ -7,27 +15,58 @@ interface MobileMenuProps {
   onOpenSettings: () => void;
 }
 
+type MenuView = 'main' | 'inventory';
+
 interface MenuItemProps {
   label: string;
+  icon: React.ReactNode;
   onClick?: () => void;
+  isFirst?: boolean;
+  isLast?: boolean;
+  variant?: 'dense' | 'large';
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ label, onClick }) => (
+const MenuItem: React.FC<MenuItemProps> = ({ 
+  label, 
+  icon, 
+  onClick, 
+  isFirst, 
+  isLast,
+  variant = 'dense'
+}) => (
   <button
     onClick={onClick}
-    className="flex gap-10 justify-between items-center p-4 w-full rounded-2xl bg-white/0 hover:bg-white/5 transition-colors"
+    className={`
+      flex justify-between items-center w-full
+      bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06]
+      transition-all duration-200 ease-in-out
+      group
+      ${isFirst ? 'rounded-t-[16px]' : ''}
+      ${isLast ? 'rounded-b-[16px]' : ''}
+      ${variant === 'dense' ? 'p-4' : 'py-5 px-4'}
+      ${!isLast ? 'mb-[2px]' : ''}
+    `}
   >
-    <div className="text-sm font-semibold tracking-normal text-white">{label}</div>
-    <MessageSquare className="w-5 h-5 text-white/70" />
+    <div className={`
+      font-semibold tracking-normal text-white 
+      transition-transform duration-200 ease-in-out
+      group-hover:translate-x-2
+      ${variant === 'dense' ? 'text-sm' : 'text-base'}
+    `}>
+      {label}
+    </div>
+    <div className="text-white/70 [&>svg]:fill-white/[0.06]">
+      {icon}
+    </div>
   </button>
 );
 
 const UserProfile: React.FC = () => {
-  const { username, resources } = useGameStore();
+  const { username, resources, cursorEmoji } = useGameStore();
   
   return (
     <div className="flex gap-2 items-center self-stretch font-semibold whitespace-nowrap">
-      <div className="w-[25px] h-[25px] rounded-full bg-white/10" />
+      <div className="text-2xl">{cursorEmoji}</div>
       <div className="flex flex-col justify-center py-1 px-3">
         <div className="text-lg tracking-normal text-white">{username}</div>
         <div className="text-xs tracking-normal text-amber-300">💰 {resources}</div>
@@ -36,8 +75,43 @@ const UserProfile: React.FC = () => {
   );
 };
 
+const InventorySlot: React.FC<{ index: number }> = ({ index }) => (
+  <button className="aspect-square bg-white/[0.03] rounded-2xl hover:bg-white/[0.05] active:bg-white/[0.06] transition-colors">
+    {/* Placeholder for item */}
+  </button>
+);
+
+const InventoryGrid: React.FC = () => {
+  return (
+    <div className="grid grid-cols-5 gap-2 px-4">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <InventorySlot key={i} index={i} />
+      ))}
+    </div>
+  );
+};
+
+const InventoryActions: React.FC<{ onBack: () => void }> = ({ onBack }) => (
+  <div className="flex gap-2 px-4 mt-4">
+    <button 
+      onClick={onBack}
+      className="flex-1 bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06] transition-colors rounded-2xl py-4 text-white font-semibold"
+    >
+      Back
+    </button>
+    <button className="flex-1 bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06] transition-colors rounded-2xl py-4 text-white font-semibold">
+      Split
+    </button>
+    <button className="flex-1 bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06] transition-colors rounded-2xl py-4 text-white font-semibold">
+      Place
+    </button>
+  </div>
+);
+
 export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettings }) => {
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<MenuView>('main');
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const { teleportToCastle, resources } = useGameStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);
@@ -48,20 +122,17 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   const lastTouchTime = useRef(0);
   const animationFrameRef = useRef<number>();
 
-  // Reset transform when sheet opens with bounce effect
   useEffect(() => {
     if (isOpen) {
       requestAnimationFrame(() => {
         if (sheetRef.current) {
           sheetRef.current.style.transform = 'translateY(100%)';
           
-          // Initial overshoot
           requestAnimationFrame(() => {
             if (sheetRef.current) {
               sheetRef.current.style.transition = 'transform 300ms cubic-bezier(0.32, 0, 0.67, 0)';
               sheetRef.current.style.transform = 'translateY(-12px)';
               
-              // Bounce back
               setTimeout(() => {
                 if (sheetRef.current) {
                   sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.33, 1, 0.68, 1)';
@@ -83,7 +154,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   };
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only handle drag from the handle area
     const target = e.target as HTMLElement;
     if (!target.closest('.drag-handle')) return;
 
@@ -96,12 +166,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     dragCurrentY.current = 0;
     isDragging.current = true;
 
-    // Remove transition during drag
     if (sheetRef.current) {
       sheetRef.current.style.transition = 'none';
     }
 
-    // Cancel any ongoing animations
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -114,7 +182,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     const touch = e.touches[0];
     const deltaY = touch.clientY - dragStartY.current;
     
-    // Apply progressive resistance to upward movement
     if (deltaY < 0) {
       const absUpwardDelta = Math.abs(deltaY);
       const resistance = 3 + (absUpwardDelta / 50);
@@ -124,11 +191,9 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       dragCurrentY.current = deltaY;
     }
 
-    // Update last touch position and time for velocity calculation
     lastTouchY.current = touch.clientY;
     lastTouchTime.current = e.timeStamp;
     
-    // Use transform3d for better performance
     sheetRef.current.style.transform = `translate3d(0, ${dragCurrentY.current}px, 0)`;
   }, []);
 
@@ -138,35 +203,30 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     e.stopPropagation();
     isDragging.current = false;
     
-    // Calculate velocity (pixels per millisecond)
     const touchDuration = e.timeStamp - lastTouchTime.current;
     const touchDistance = e.changedTouches[0].clientY - lastTouchY.current;
     const velocity = touchDistance / touchDuration;
     
-    // Reduced threshold to 5% of screen height
     const threshold = window.innerHeight * 0.05;
     
     if (dragCurrentY.current > threshold || velocity > 0.2) {
-      // Immediately start closing animation
       const duration = Math.min(Math.abs(velocity) * 500, 300);
       sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1)`;
       sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
       
-      // Ensure we clean up properly
       const cleanup = () => {
         if (sheetRef.current) {
           sheetRef.current.removeEventListener('transitionend', cleanup);
           setIsOpen(false);
+          setCurrentView('main');
           sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
         }
       };
       
       sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
       
-      // Fallback cleanup in case transitionend doesn't fire
       setTimeout(cleanup, duration + 100);
     } else {
-      // Snap back to open position
       sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
       sheetRef.current.style.transform = 'translate3d(0, 0, 0)';
     }
@@ -180,7 +240,54 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     setIsOpen(true);
   }, []);
 
-  // Cleanup animations on unmount
+  const handleViewTransition = useCallback((view: MenuView) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    
+    if (sheetRef.current) {
+      // Start transition
+      sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1), height 150ms cubic-bezier(0.4, 0, 0.2, 1)';
+      
+      // Get the target view content
+      const targetContent = sheetRef.current.querySelector(
+        `[data-view="${view}"]`
+      ) as HTMLElement;
+      
+      if (targetContent) {
+        // Temporarily make the target content visible but not interactive
+        // to get its true height
+        targetContent.style.opacity = '0';
+        targetContent.style.position = 'static';
+        targetContent.style.pointerEvents = 'none';
+        
+        // Get the height including padding
+        const targetHeight = targetContent.offsetHeight;
+        
+        // Reset the target content styles
+        targetContent.style.opacity = '';
+        targetContent.style.position = '';
+        targetContent.style.pointerEvents = '';
+        
+        // Add padding to the height
+        const totalHeight = targetHeight + 32; // 16px top + 16px bottom padding
+        sheetRef.current.style.height = `${totalHeight}px`;
+      }
+    }
+    
+    setTimeout(() => {
+      setCurrentView(view);
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          setIsTransitioning(false);
+          // Reset height to auto after transition
+          if (sheetRef.current) {
+            sheetRef.current.style.height = 'auto';
+          }
+        }, 150);
+      });
+    }, 150);
+  }, [isTransitioning]);
+
   useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
@@ -189,9 +296,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     };
   }, []);
 
+  const menuVariant: 'dense' | 'large' = 'large';
+
   return (
     <>
-      {/* Floating Action Button */}
       <button
         onClick={handleOpenMenu}
         onTouchStart={(e) => {
@@ -208,7 +316,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         <div className="w-6 h-6 bg-white/10 rounded-full" />
       </button>
 
-      {/* Background Overlay */}
       <div
         className={`fixed inset-0 bg-black/50 z-[150] transition-opacity duration-300 md:hidden game-ui ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -216,52 +323,104 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         onClick={() => setIsOpen(false)}
       />
 
-      {/* Bottom Sheet */}
       <div
         ref={sheetRef}
         role="navigation"
         aria-label="User menu"
-        className={`fixed inset-x-2 bottom-2 bg-stone-900 rounded-[32px] z-[151] md:hidden game-ui ${
-          !isOpen && 'pointer-events-none'
-        }`}
+        className={`
+          fixed inset-x-2 bottom-2 
+          bg-[#1E1E1E] rounded-[32px] 
+          z-[151] md:hidden game-ui
+          overflow-hidden
+          ${!isOpen && 'pointer-events-none'}
+        `}
         onClick={e => e.stopPropagation()}
         style={{ 
-          willChange: 'transform',
+          willChange: 'transform, height',
           touchAction: 'none',
           transform: 'translate3d(0, 120%, 0)',
           transition: 'transform 200ms ease-out'
         }}
       >
-        {/* Handle */}
         <div 
-          className="flex flex-col px-4 pt-2 pb-4 drag-handle"
+          className="flex flex-col pt-2 pb-4 drag-handle"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           <div className="flex self-center bg-zinc-300/10 h-[5px] rounded-[34px] w-[55px] mb-4" />
           
-          {/* User Profile */}
-          <div className="flex justify-between items-center p-2 w-full">
-            <UserProfile />
-            <button
-              onClick={onOpenSettings}
-              className="p-2 hover:bg-white/5 rounded-full transition-colors"
+          <div className="relative">
+            <div 
+              data-view="main"
+              className={`
+                w-full px-4
+                transition-opacity duration-150 ease-in-out
+                ${currentView === 'main' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}
+                ${currentView !== 'main' && 'absolute top-0 left-0'}
+              `}
             >
-              <div className="w-5 h-5 bg-white/10 rounded-full" />
-            </button>
-          </div>
+              <div className="flex justify-between items-center mb-4 -mx-4 px-4">
+                <UserProfile />
+                <button className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-full transition-colors">
+                  <span className="text-white/50 font-semibold">Chat</span>
+                  <div className="text-white/50 [&>svg]:fill-white/[0.06]">
+                    <MessageSquareFill className="w-5 h-5" />
+                  </div>
+                </button>
+              </div>
 
-          {/* Menu Items */}
-          <div className="mt-4 flex flex-col w-full">
-            <MenuItem label="Inventory" onClick={onOpenShop} />
-            <MenuItem label="Social" />
-            <MenuItem 
-              label="Return to Town" 
-              onClick={resources > 0 ? handleTeleport : undefined} 
-            />
-            <MenuItem label="Leaderboard" />
-            <MenuItem label="Preferences" onClick={onOpenSettings} />
+              <div className="flex flex-col w-full">
+                <MenuItem 
+                  label="Inventory" 
+                  icon={<GridFill size={20} />} 
+                  onClick={() => handleViewTransition('inventory')}
+                  isFirst
+                  variant={menuVariant}
+                />
+                <MenuItem 
+                  label="Social" 
+                  icon={<UsersFill size={20} />}
+                  variant={menuVariant}
+                />
+                <MenuItem 
+                  label="World Map" 
+                  icon={<GlobeFill size={20} />}
+                  onClick={resources > 0 ? handleTeleport : undefined}
+                  variant={menuVariant}
+                />
+                <MenuItem 
+                  label="Leaderboard" 
+                  icon={<TrophyFill size={20} />}
+                  variant={menuVariant}
+                />
+                <MenuItem 
+                  label="Preferences" 
+                  icon={<SettingsFill size={20} />}
+                  onClick={onOpenSettings}
+                  isLast
+                  variant={menuVariant}
+                />
+              </div>
+            </div>
+
+            <div 
+              data-view="inventory"
+              className={`
+                w-full px-4
+                transition-opacity duration-150 ease-in-out
+                ${currentView === 'inventory' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}
+                ${currentView !== 'inventory' && 'absolute top-0 left-0'}
+              `}
+            >
+              <div className="flex items-center mb-4 -mx-4 px-4">
+                <UserProfile />
+              </div>
+              <InventoryGrid />
+              <div className="mt-4">
+                <InventoryActions onBack={() => handleViewTransition('main')} />
+              </div>
+            </div>
           </div>
         </div>
       </div>
