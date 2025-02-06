@@ -17,6 +17,7 @@ export interface WorldState {
   loadWorldResources: () => Promise<void>;
   damageResource: (id: string, damage: number) => Promise<void>;
   syncWorldResources: (resources: WorldResource[]) => void;
+  teleportToCastle: () => void;
 }
 
 export interface WorldResource {
@@ -53,7 +54,15 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
   resources: 0,
   worldResources: [],
 
-  setWorldPosition: (x, y) => set({ worldPosition: { x, y } }),
+  setWorldPosition: (x, y) => {
+    set({ worldPosition: { x, y } });
+    // Save position to user progress
+    const store = get() as any;
+    if (store.user) {
+      store.position = { x, y };
+      store.saveUserProgress();
+    }
+  },
   
   addResources: (amount) => set((state) => ({ 
     resources: state.resources + amount 
@@ -129,6 +138,13 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
             resources: state.resources + currentResource.value_per_click
           }));
 
+          // Save progress after collecting resources
+          const store = get() as any;
+          if (store.user) {
+            store.resources = get().resources + currentResource.value_per_click;
+            store.saveUserProgress();
+          }
+
           // Spawn new resource
           const position = getRandomSpawnPosition(get().worldResources);
           const resourceConfig = selectRandomResource();
@@ -164,6 +180,13 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
           set(state => ({
             resources: state.resources + currentResource.value_per_click
           }));
+
+          // Save progress after collecting resources
+          const store = get() as any;
+          if (store.user) {
+            store.resources = get().resources + currentResource.value_per_click;
+            store.saveUserProgress();
+          }
         }
       }
     } catch (error) {
@@ -177,5 +200,15 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
       new Map(resources.map(r => [r.id, r])).values()
     );
     set({ worldResources: uniqueResources });
+  },
+
+  teleportToCastle: () => {
+    set({ worldPosition: { x: 0, y: 0 } });
+    // Save position after teleporting
+    const store = get() as any;
+    if (store.user) {
+      store.position = { x: 0, y: 0 };
+      store.saveUserProgress();
+    }
   }
 });

@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
 import { supabase } from '../../lib/supabase';
+import { WorldPosition } from './worldSlice';
 
 export interface UserState {
   user: any | null;
@@ -9,6 +10,7 @@ export interface UserState {
   hideCursorWhilePanning: boolean;
   progressId: string | null;
   resources: number;
+  position: WorldPosition;
   setUser: (user: any | null) => void;
   setUsername: (name: string) => void;
   setCursorEmoji: (emoji: string) => void;
@@ -26,13 +28,15 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
   hideCursorWhilePanning: false,
   progressId: null,
   resources: 0,
+  position: { x: 0, y: 0 },
 
   setUser: (user) => {
     set({ user });
     if (!user) {
       set({
         progressId: null,
-        resources: 0
+        resources: 0,
+        position: { x: 0, y: 0 }
       });
     }
   },
@@ -62,7 +66,11 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
         set({
           progressId: latestProgress.id,
           username: latestProgress.username || get().username,
-          resources: latestProgress.resources || 0
+          resources: latestProgress.resources || 0,
+          position: {
+            x: latestProgress.position_x || 0,
+            y: latestProgress.position_y || 0
+          }
         });
       } else {
         const { data: newProgress, error: insertError } = await supabase
@@ -70,7 +78,9 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
           .insert({
             user_id: user.id,
             username: get().username,
-            resources: 0
+            resources: 0,
+            position_x: 0,
+            position_y: 0
           })
           .select()
           .single();
@@ -80,7 +90,8 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
         if (newProgress) {
           set({ 
             progressId: newProgress.id,
-            resources: 0
+            resources: 0,
+            position: { x: 0, y: 0 }
           });
         }
       }
@@ -90,7 +101,7 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
   },
 
   saveUserProgress: async () => {
-    const { user, progressId, username, resources } = get();
+    const { user, progressId, username, resources, position } = get();
     if (!user) return;
 
     try {
@@ -98,6 +109,8 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
         user_id: user.id,
         username,
         resources,
+        position_x: position.x,
+        position_y: position.y,
         updated_at: new Date().toISOString()
       };
 
