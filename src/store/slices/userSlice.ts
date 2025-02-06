@@ -8,6 +8,7 @@ export interface UserState {
   afkTimeout: number;
   hideCursorWhilePanning: boolean;
   progressId: string | null;
+  resources: number;
   setUser: (user: any | null) => void;
   setUsername: (name: string) => void;
   setCursorEmoji: (emoji: string) => void;
@@ -24,12 +25,14 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
   afkTimeout: 5000,
   hideCursorWhilePanning: false,
   progressId: null,
+  resources: 0,
 
   setUser: (user) => {
     set({ user });
     if (!user) {
       set({
-        progressId: null
+        progressId: null,
+        resources: 0
       });
     }
   },
@@ -57,16 +60,17 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
       
       if (latestProgress) {
         set({
-          progressId: latestProgress.id
+          progressId: latestProgress.id,
+          username: latestProgress.username || get().username,
+          resources: latestProgress.resources || 0
         });
       } else {
         const { data: newProgress, error: insertError } = await supabase
           .from('user_progress')
           .insert({
             user_id: user.id,
-            resources: 0,
-            position_x: 0,
-            position_y: 0
+            username: get().username,
+            resources: 0
           })
           .select()
           .single();
@@ -74,7 +78,10 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
         if (insertError) throw insertError;
 
         if (newProgress) {
-          set({ progressId: newProgress.id });
+          set({ 
+            progressId: newProgress.id,
+            resources: 0
+          });
         }
       }
     } catch (error) {
@@ -83,12 +90,14 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
   },
 
   saveUserProgress: async () => {
-    const { user, progressId } = get();
+    const { user, progressId, username, resources } = get();
     if (!user) return;
 
     try {
       const progressData = {
         user_id: user.id,
+        username,
+        resources,
         updated_at: new Date().toISOString()
       };
 
