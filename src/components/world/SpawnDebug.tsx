@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { SPAWN_AREA } from '../../config/lootTable';
 import { RESOURCE_BALANCE } from '../../config/resourceBalance';
-import { TOWN_RADIUS } from './constants';
 import { useGameStore } from '../../store/gameStore';
 import { supabase } from '../../lib/supabase';
 
@@ -9,7 +8,13 @@ interface SpawnDebugProps {
   worldPosition: { x: number; y: number };
 }
 
-export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
+{/* Update the visualization bounds to use large finite numbers */}
+const VISUALIZATION_BOUNDS = {
+  min: -10000,
+  max: 10000
+};
+
+const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
   const { worldResources } = useGameStore();
   const [settings, setSettings] = useState({
     // Spawn Area Settings
@@ -98,12 +103,6 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
       if (distance < settings.clusterMinSpacing) {
         return false;
       }
-    }
-
-    // Check if within world bounds
-    if (x < SPAWN_AREA.minX || x > SPAWN_AREA.maxX || 
-        y < SPAWN_AREA.minY || y > SPAWN_AREA.maxY) {
-      return false;
     }
 
     // Check distance from center (castle)
@@ -238,14 +237,14 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {/* World bounds */}
+      {/* World bounds visualization (using finite numbers) */}
       <div
         className="absolute border-2 border-blue-500/30"
         style={{
-          left: SPAWN_AREA.minX + worldPosition.x,
-          top: SPAWN_AREA.minY + worldPosition.y,
-          width: SPAWN_AREA.maxX - SPAWN_AREA.minX,
-          height: SPAWN_AREA.maxY - SPAWN_AREA.minY
+          left: VISUALIZATION_BOUNDS.min + worldPosition.x,
+          top: VISUALIZATION_BOUNDS.min + worldPosition.y,
+          width: VISUALIZATION_BOUNDS.max - VISUALIZATION_BOUNDS.min,
+          height: VISUALIZATION_BOUNDS.max - VISUALIZATION_BOUNDS.min
         }}
       />
 
@@ -277,10 +276,10 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
       <div
         className="absolute"
         style={{
-          left: SPAWN_AREA.minX + worldPosition.x,
-          top: SPAWN_AREA.minY + worldPosition.y,
-          width: SPAWN_AREA.maxX - SPAWN_AREA.minX,
-          height: SPAWN_AREA.maxY - SPAWN_AREA.minY,
+          left: VISUALIZATION_BOUNDS.min + worldPosition.x,
+          top: VISUALIZATION_BOUNDS.min + worldPosition.y,
+          width: VISUALIZATION_BOUNDS.max - VISUALIZATION_BOUNDS.min,
+          height: VISUALIZATION_BOUNDS.max - VISUALIZATION_BOUNDS.min,
           backgroundImage: `
             linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px)
@@ -339,7 +338,7 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
                 <input
                   type="range"
                   min="0"
-                  max="300"
+                  max="1000"
                   value={settings.minDistanceFromCenter}
                   onChange={(e) => handleSettingChange('minDistanceFromCenter', Number(e.target.value))}
                   className="w-full"
@@ -353,7 +352,7 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
                 <input
                   type="range"
                   min="0"
-                  max="200"
+                  max="500"
                   value={settings.minSpacing}
                   onChange={(e) => handleSettingChange('minSpacing', Number(e.target.value))}
                   className="w-full"
@@ -381,7 +380,7 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
                 <input
                   type="range"
                   min="0"
-                  max="300"
+                  max="1000"
                   value={settings.clusterRadius}
                   onChange={(e) => handleSettingChange('clusterRadius', Number(e.target.value))}
                   className="w-full"
@@ -395,7 +394,7 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
                 <input
                   type="range"
                   min="0"
-                  max="200"
+                  max="500"
                   value={settings.clusterMinSpacing}
                   onChange={(e) => handleSettingChange('clusterMinSpacing', Number(e.target.value))}
                   className="w-full"
@@ -423,7 +422,7 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
                 <input
                   type="range"
                   min="0"
-                  max="600"
+                  max="2000"
                   value={settings.spawnRadius}
                   onChange={(e) => handleSettingChange('spawnRadius', Number(e.target.value))}
                   className="w-full"
@@ -434,15 +433,15 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
             <>
               <div>
                 <label className="text-white text-sm block mb-1">
-                  Target Resource Count: {settings.targetResourceCount}
+                  Target Resource Count
                 </label>
                 <input
-                  type="range"
+                  type="number"
                   min="0"
-                  max="50"
+                  max="200"
                   value={settings.targetResourceCount}
                   onChange={(e) => handleSettingChange('targetResourceCount', Number(e.target.value))}
-                  className="w-full"
+                  className="w-full bg-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -525,3 +524,7 @@ export const SpawnDebug: React.FC<SpawnDebugProps> = ({ worldPosition }) => {
     </div>
   );
 };
+
+export default SpawnDebug;
+
+export { SpawnDebug }

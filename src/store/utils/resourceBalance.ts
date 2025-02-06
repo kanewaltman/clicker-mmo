@@ -33,43 +33,59 @@ export async function balanceResources(currentResources: WorldResource[]) {
       }
     }
   } else if (deficit > 0) {
-    // Adjust batch size based on spawn rate
-    const adjustedBatchSize = Math.min(
-      deficit,
-      Math.ceil(RESOURCE_BALANCE.spawnBatchSize * spawnRate)
-    );
-    
-    const spawnPromises = [];
-
-    for (let i = 0; i < adjustedBatchSize; i++) {
-      const rarity = getResourceTypeByProbability();
-      const resource = LOOT_TABLE.find(r => r.rarity === rarity);
-      if (!resource) continue;
-
-      const position = getRandomSpawnPosition(currentResources);
-      
-      spawnPromises.push(
-        supabase
-          .from('resources')
-          .insert({
-            type: resource.type,
-            rarity: resource.rarity,
-            position_x: position.x,
-            position_y: position.y,
-            max_health: resource.stats.maxHealth,
-            current_health: resource.stats.maxHealth,
-            value_per_click: resource.stats.valuePerClick,
-            emoji: resource.emoji,
-            created_at: new Date().toISOString()
-          })
-          .select()
-      );
+    // Delete all existing resources first
+    try {
+      await supabase
+        .from('resources')
+        .delete()
+        .not('id', 'is', null);
+    } catch (error) {
+      console.error('Error clearing resources:', error);
     }
 
-    try {
-      await Promise.all(spawnPromises);
-    } catch (error) {
-      console.error('Error balancing resources:', error);
+    // Calculate total resources to spawn
+    const totalToSpawn = RESOURCE_BALANCE.targetResourceCount;
+    const batchSize = 10; // Spawn in smaller batches to prevent timeouts
+    const totalBatches = Math.ceil(totalToSpawn / batchSize);
+
+    for (let batch = 0; batch < totalBatches; batch++) {
+      const spawnPromises = [];
+      const currentBatchSize = Math.min(batchSize, totalToSpawn - (batch * batchSize));
+
+      for (let i = 0; i < currentBatchSize; i++) {
+        const rarity = getResourceTypeByProbability();
+        const resource = LOOT_TABLE.find(r => r.rarity === rarity);
+        if (!resource) continue;
+
+        const position = getRandomSpawnPosition([]);
+        
+        spawnPromises.push(
+          supabase
+            .from('resources')
+            .insert({
+              type: resource.type,
+              rarity: resource.rarity,
+              position_x: position.x,
+              position_y: position.y,
+              max_health: resource.stats.maxHealth,
+              current_health: resource.stats.maxHealth,
+              value_per_click: resource.stats.valuePerClick,
+              emoji: resource.emoji,
+              created_at: new Date().toISOString()
+            })
+            .select()
+        );
+      }
+
+      try {
+        await Promise.all(spawnPromises);
+        // Add a small delay between batches to prevent overwhelming the database
+        if (batch < totalBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.error('Error spawning batch:', error);
+      }
     }
   }
 }

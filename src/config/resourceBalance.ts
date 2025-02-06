@@ -1,16 +1,16 @@
 // Resource balancing configuration
 export const RESOURCE_BALANCE = {
-  targetResourceCount: 20, // Total number of resources to maintain
-  maxDistance: 800, // Maximum distance from castle (0,0)
+  targetResourceCount: 200, // Total number of resources to maintain
+  maxDistance: 10000, // Increased maximum distance from castle (0,0)
   checkInterval: 2000, // Check every 2 seconds
-  spawnBatchSize: 3, // Spawn up to 3 resources at a time
+  spawnBatchSize: 5, // Increased to spawn more resources at once
   densityAllowance: 0.2, // 20% variance allowed
   // Dynamic spawn rate based on deficit
   spawnRateMultiplier: (currentCount: number, targetCount: number) => {
     const deficit = targetCount - currentCount;
     if (deficit <= 0) return 1;
-    // Increase spawn rate when deficit is larger
-    return Math.min(5, 1 + (deficit / targetCount));
+    // Increase spawn rate more aggressively when deficit is larger
+    return Math.min(10, 1 + (deficit / targetCount) * 2);
   },
   // Distribution of resource types (must sum to 1)
   distribution: {
@@ -39,9 +39,9 @@ export function calculateResourceRange(resources: { position: { x: number; y: nu
     return distance <= RESOURCE_BALANCE.maxDistance;
   }).length;
 
-  // Calculate allowance with a minimum of 2 resources
+  // Calculate allowance with a minimum of 5 resources
   const allowance = Math.max(
-    2,
+    5,
     Math.floor(RESOURCE_BALANCE.targetResourceCount * RESOURCE_BALANCE.densityAllowance)
   );
   const minAcceptable = RESOURCE_BALANCE.targetResourceCount - allowance;
