@@ -67,10 +67,26 @@ const UserProfile: React.FC = () => {
   return (
     <div className="flex gap-2 items-center self-stretch font-semibold whitespace-nowrap">
       <div className="text-2xl">{cursorEmoji}</div>
-      <div className="flex flex-col justify-center py-1 px-3">
+      <div className="flex flex-col justify-center py-1">
         <div className="text-lg tracking-normal text-white">{username}</div>
         <div className="text-xs tracking-normal text-amber-300">💰 {resources}</div>
       </div>
+    </div>
+  );
+};
+
+const Header: React.FC<{ currentView: MenuView }> = ({ currentView }) => {
+  return (
+    <div className="flex justify-between items-center px-6 pb-4">
+      <UserProfile />
+      {currentView === 'main' && (
+        <button className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-full transition-colors">
+          <span className="text-white/50 font-semibold">Chat</span>
+          <div className="text-white/50 [&>svg]:fill-white/[0.06]">
+            <MessageSquareFill className="w-5 h-5" />
+          </div>
+        </button>
+      )}
     </div>
   );
 };
@@ -83,7 +99,7 @@ const InventorySlot: React.FC<{ index: number }> = ({ index }) => (
 
 const InventoryGrid: React.FC = () => {
   return (
-    <div className="grid grid-cols-5 gap-2 px-4">
+    <div className="grid grid-cols-5 gap-2">
       {Array.from({ length: 10 }).map((_, i) => (
         <InventorySlot key={i} index={i} />
       ))}
@@ -92,7 +108,7 @@ const InventoryGrid: React.FC = () => {
 };
 
 const InventoryActions: React.FC<{ onBack: () => void }> = ({ onBack }) => (
-  <div className="flex gap-2 px-4 mt-4">
+  <div className="flex gap-2 mt-4">
     <button 
       onClick={onBack}
       className="flex-1 bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06] transition-colors rounded-2xl py-4 text-white font-semibold"
@@ -288,6 +304,26 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     }, 150);
   }, [isTransitioning]);
 
+  const handleCloseSheet = useCallback(() => {
+    if (!sheetRef.current) return;
+    
+    const duration = 300;
+    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1)`;
+    sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
+    
+    const cleanup = () => {
+      if (sheetRef.current) {
+        sheetRef.current.removeEventListener('transitionend', cleanup);
+        setIsOpen(false);
+        setCurrentView('main');
+        sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
+      }
+    };
+    
+    sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
+    setTimeout(cleanup, duration + 100); // Fallback cleanup
+  }, []);
+
   useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
@@ -320,7 +356,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         className={`fixed inset-0 bg-black/50 z-[150] transition-opacity duration-300 md:hidden game-ui ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setIsOpen(false)}
+        onClick={handleCloseSheet}
       />
 
       <div
@@ -343,7 +379,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         }}
       >
         <div 
-          className="flex flex-col pt-2 pb-4 drag-handle"
+          className="flex flex-col pt-2 drag-handle"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -351,25 +387,17 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
           <div className="flex self-center bg-zinc-300/10 h-[5px] rounded-[34px] w-[55px] mb-4" />
           
           <div className="relative">
+            <Header currentView={currentView} />
+
             <div 
               data-view="main"
               className={`
-                w-full px-4
+                w-full px-4 pb-4
                 transition-opacity duration-150 ease-in-out
                 ${currentView === 'main' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}
                 ${currentView !== 'main' && 'absolute top-0 left-0'}
               `}
             >
-              <div className="flex justify-between items-center mb-4 -mx-4 px-4">
-                <UserProfile />
-                <button className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-full transition-colors">
-                  <span className="text-white/50 font-semibold">Chat</span>
-                  <div className="text-white/50 [&>svg]:fill-white/[0.06]">
-                    <MessageSquareFill className="w-5 h-5" />
-                  </div>
-                </button>
-              </div>
-
               <div className="flex flex-col w-full">
                 <MenuItem 
                   label="Inventory" 
@@ -407,15 +435,12 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
             <div 
               data-view="inventory"
               className={`
-                w-full px-4
+                w-full px-4 pb-4
                 transition-opacity duration-150 ease-in-out
                 ${currentView === 'inventory' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}
                 ${currentView !== 'inventory' && 'absolute top-0 left-0'}
               `}
             >
-              <div className="flex items-center mb-4 -mx-4 px-4">
-                <UserProfile />
-              </div>
               <InventoryGrid />
               <div className="mt-4">
                 <InventoryActions onBack={() => handleViewTransition('main')} />
