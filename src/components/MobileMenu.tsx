@@ -142,7 +142,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     inventory: 0
   });
 
-  // Cache initial view heights
   useEffect(() => {
     const cacheViewHeights = () => {
       const mainView = document.querySelector('.main-view-content');
@@ -156,10 +155,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       }
     };
 
-    // Initial cache
     cacheViewHeights();
 
-    // Update cache on resize
     const resizeObserver = new ResizeObserver(cacheViewHeights);
     const views = document.querySelectorAll('.main-view-content, .inventory-view-content');
     views.forEach(view => resizeObserver.observe(view));
@@ -205,7 +202,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     const direction = view === 'main' ? -1 : 1;
     const container = viewsContainerRef.current;
     
-    // Animate height before content transition
     if (sheetRef.current) {
       const currentHeight = sheetRef.current.offsetHeight;
       const targetHeight = viewHeightCache.current[view];
@@ -213,24 +209,19 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       sheetRef.current.style.height = `${currentHeight}px`;
       sheetRef.current.style.transition = 'height 300ms cubic-bezier(0.4, 0, 0.2, 1)';
       
-      // Force reflow
       void sheetRef.current.offsetHeight;
       
       sheetRef.current.style.height = `${targetHeight}px`;
     }
     
-    // Set initial positions
     container.style.transform = 'translateX(0)';
     container.style.transition = 'none';
     
-    // Force reflow
     void container.offsetHeight;
 
-    // Start transition
     container.style.transition = 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)';
     container.style.transform = `translateX(${-direction * 100}%)`;
 
-    // Update view after animation
     setTimeout(() => {
       setCurrentView(view);
       container.style.transition = 'none';
@@ -238,6 +229,78 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       setIsTransitioning(false);
     }, 300);
   }, [isTransitioning]);
+
+  const handleCloseSheet = useCallback(() => {
+    if (!sheetRef.current) return;
+    
+    const duration = 300;
+    const currentHeight = sheetRef.current.offsetHeight;
+    
+    sheetRef.current.style.height = `${currentHeight}px`;
+    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1), height ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    
+    void sheetRef.current.offsetHeight;
+    
+    sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
+    sheetRef.current.style.height = '0px';
+    
+    const cleanup = () => {
+      if (sheetRef.current) {
+        sheetRef.current.removeEventListener('transitionend', cleanup);
+        setIsOpen(false);
+        setCurrentView('main');
+        sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
+        sheetRef.current.style.height = `${viewHeightCache.current.main}px`;
+      }
+    };
+    
+    sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
+    setTimeout(cleanup, duration + 100);
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!isDragging.current || !sheetRef.current) return;
+    
+    e.stopPropagation();
+    isDragging.current = false;
+    
+    const touchDuration = e.timeStamp - lastTouchTime.current;
+    const touchDistance = e.changedTouches[0].clientY - lastTouchY.current;
+    const velocity = touchDistance / touchDuration;
+    
+    const threshold = window.innerHeight * 0.05;
+    
+    if (dragCurrentY.current > threshold || velocity > 0.2) {
+      const duration = Math.min(Math.abs(velocity) * 500, 300);
+      const currentHeight = sheetRef.current.offsetHeight;
+      
+      sheetRef.current.style.height = `${currentHeight}px`;
+      sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1), height ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+      
+      void sheetRef.current.offsetHeight;
+      
+      sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
+      sheetRef.current.style.height = '0px';
+      
+      const cleanup = () => {
+        if (sheetRef.current) {
+          sheetRef.current.removeEventListener('transitionend', cleanup);
+          setIsOpen(false);
+          setCurrentView('main');
+          sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
+          sheetRef.current.style.height = `${viewHeightCache.current.main}px`;
+        }
+      };
+      
+      sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
+      setTimeout(cleanup, duration + 100);
+    } else {
+      sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
+      sheetRef.current.style.transform = 'translate3d(0, 0, 0)';
+    }
+    
+    dragCurrentY.current = 0;
+  }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
@@ -283,66 +346,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     sheetRef.current.style.transform = `translate3d(0, ${dragCurrentY.current}px, 0)`;
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!isDragging.current || !sheetRef.current) return;
-    
-    e.stopPropagation();
-    isDragging.current = false;
-    
-    const touchDuration = e.timeStamp - lastTouchTime.current;
-    const touchDistance = e.changedTouches[0].clientY - lastTouchY.current;
-    const velocity = touchDistance / touchDuration;
-    
-    const threshold = window.innerHeight * 0.05;
-    
-    if (dragCurrentY.current > threshold || velocity > 0.2) {
-      const duration = Math.min(Math.abs(velocity) * 500, 300);
-      sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1)`;
-      sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
-      
-      const cleanup = () => {
-        if (sheetRef.current) {
-          sheetRef.current.removeEventListener('transitionend', cleanup);
-          setIsOpen(false);
-          setCurrentView('main');
-          sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
-        }
-      };
-      
-      sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
-      setTimeout(cleanup, duration + 100);
-    } else {
-      sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
-      sheetRef.current.style.transform = 'translate3d(0, 0, 0)';
-    }
-    
-    dragCurrentY.current = 0;
-  }, []);
-
   const handleOpenMenu = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsOpen(true);
-  }, []);
-
-  const handleCloseSheet = useCallback(() => {
-    if (!sheetRef.current) return;
-    
-    const duration = 300;
-    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1)`;
-    sheetRef.current.style.transform = 'translate3d(0, 100%, 0)';
-    
-    const cleanup = () => {
-      if (sheetRef.current) {
-        sheetRef.current.removeEventListener('transitionend', cleanup);
-        setIsOpen(false);
-        setCurrentView('main');
-        sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
-      }
-    };
-    
-    sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
-    setTimeout(cleanup, duration + 100);
   }, []);
 
   useEffect(() => {
