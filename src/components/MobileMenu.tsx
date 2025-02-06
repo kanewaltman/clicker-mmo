@@ -261,48 +261,57 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     setIsTransitioning(true);
     
     if (sheetRef.current) {
-      // Start transition
-      sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1), height 150ms cubic-bezier(0.4, 0, 0.2, 1)';
-      
-      // Get the target view content
+      // Get both current and target view contents
+      const currentContent = sheetRef.current.querySelector(
+        `[data-view="${currentView}"]`
+      ) as HTMLElement;
       const targetContent = sheetRef.current.querySelector(
         `[data-view="${view}"]`
       ) as HTMLElement;
       
-      if (targetContent) {
-        // Temporarily make the target content visible but not interactive
-        // to get its true height
+      if (currentContent && targetContent) {
+        // Set initial height to current content height
+        const currentHeight = currentContent.offsetHeight;
+        sheetRef.current.style.height = `${currentHeight}px`;
+        
+        // Force a reflow to ensure the initial height is applied
+        void sheetRef.current.offsetHeight;
+        
+        // Make target content temporarily visible but not interactive
         targetContent.style.opacity = '0';
         targetContent.style.position = 'static';
+        targetContent.style.visibility = 'visible';
         targetContent.style.pointerEvents = 'none';
         
-        // Get the height including padding
+        // Get the target height
         const targetHeight = targetContent.offsetHeight;
         
-        // Reset the target content styles
+        // Reset target content styles
         targetContent.style.opacity = '';
         targetContent.style.position = '';
+        targetContent.style.visibility = '';
         targetContent.style.pointerEvents = '';
         
-        // Add padding to the height
-        const totalHeight = targetHeight + 32; // 16px top + 16px bottom padding
-        sheetRef.current.style.height = `${totalHeight}px`;
-      }
-    }
-    
-    setTimeout(() => {
-      setCurrentView(view);
-      requestAnimationFrame(() => {
+        // Start transition
+        sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1), height 150ms cubic-bezier(0.4, 0, 0.2, 1)';
+        sheetRef.current.style.height = `${targetHeight}px`;
+        
+        // Switch views after height transition starts
+        requestAnimationFrame(() => {
+          setCurrentView(view);
+        });
+        
+        // Reset to auto height after transition
         setTimeout(() => {
-          setIsTransitioning(false);
-          // Reset height to auto after transition
           if (sheetRef.current) {
             sheetRef.current.style.height = 'auto';
+            sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
           }
+          setIsTransitioning(false);
         }, 150);
-      });
-    }, 150);
-  }, [isTransitioning]);
+      }
+    }
+  }, [isTransitioning, currentView]);
 
   const handleCloseSheet = useCallback(() => {
     if (!sheetRef.current) return;
