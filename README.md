@@ -361,3 +361,43 @@ The game includes a comprehensive debug mode that can be accessed by pressing `F
    ```
 
 The debug mode provides essential tools for understanding and testing the game's resource spawning mechanics, making it invaluable for development and testing.
+
+### 🚀 Performance Optimizations
+
+The game implements sophisticated performance optimizations to handle large numbers of resources efficiently:
+
+1. **Spatial Partitioning**
+   - World divided into 500x500 pixel grid cells
+   - Resources and structures organized by grid location
+   - Efficient querying of visible entities
+   - Automatic grid management and cleanup
+
+2. **Viewport Culling**
+   - Only renders entities visible in the viewport
+   - 200px padding to prevent pop-in effects
+   - Efficient screen coordinate calculations
+   - Smooth transitions during movement
+
+3. **Memory Management**
+   ```typescript
+   interface SpatialGrid {
+     resources: Map<string, WorldResource[]>;
+     structures: Map<string, Structure[]>;
+   }
+   ```
+   - Efficient grid-based entity storage
+   - Automatic cleanup of out-of-view entities
+   - Memory-efficient data structures
+   - Optimized collection management
+
+4. **Rendering Optimizations**
+   - React component memoization
+   - Efficient state updates
+   - Batched rendering updates
+   - Smart re-render prevention
+
+5. **Mobile-Specific Optimizations**
+   - Reduced animation complexity
+   - Touch event optimization
+   - Efficient gesture handling
+   - Viewport-based rendering
