@@ -14,6 +14,8 @@ import { useAFKDetection } from './world/hooks/useAFKDetection';
 import { useCursorSync } from './world/hooks/useCursorSync';
 import { useWorldControls } from './world/hooks/useWorldControls';
 import { SpawnDebug } from './world/SpawnDebug';
+import { useSpatialPartitioning } from './world/hooks/useSpatialPartitioning';
+import { useViewportCulling } from './world/hooks/useViewportCulling';
 import {
   TOWN_CENTER,
   TOWN_RADIUS,
@@ -43,6 +45,13 @@ const World: React.FC = () => {
   const [isDraggingLeaderboard, setIsDraggingLeaderboard] = useState(false);
   const [leaderboardDragOffset, setLeaderboardDragOffset] = useState({ x: 0, y: 0 });
   const [showSpawnDebug, setShowSpawnDebug] = useState(false);
+
+  const { isInViewport } = useViewportCulling();
+  const { visibleResources, visibleStructures } = useSpatialPartitioning(
+    gameStore.worldResources,
+    gameStore.structures,
+    gameStore.worldPosition
+  );
 
   useEffect(() => {
     if (!initRef.current) {
@@ -309,10 +318,6 @@ const World: React.FC = () => {
       .slice(0, 5);
   }, [allPlayers]);
 
-  const uniqueResources = useMemo(() => {
-    return Array.from(new Map(gameStore.worldResources.map(r => [r.id, r])).values());
-  }, [gameStore.worldResources]);
-
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   return (
@@ -427,7 +432,7 @@ const World: React.FC = () => {
             cursor: placingStructure ? 'crosshair' : 'default'
           }}
         >
-          {uniqueResources.map((resource) => (
+          {visibleResources.map((resource) => (
             <ResourceNode
               key={resource.id}
               resource={resource}
@@ -437,7 +442,7 @@ const World: React.FC = () => {
             />
           ))}
 
-          {gameStore.structures.map((structure) => (
+          {visibleStructures.map((structure) => (
             <Structure
               key={structure.id}
               structure={structure}
