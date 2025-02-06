@@ -172,15 +172,18 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
           
           requestAnimationFrame(() => {
             if (sheetRef.current) {
-              sheetRef.current.style.transition = 'transform 300ms cubic-bezier(0.32, 0, 0.67, 0)';
-              sheetRef.current.style.transform = 'translateY(-12px)';
+              // Faster initial spring with more aggressive overshoot
+              sheetRef.current.style.transition = 'transform 280ms cubic-bezier(0.32, 1.75, 0.65, 0.88)';
+              // Smaller overshoot distance
+              sheetRef.current.style.transform = 'translateY(-6px)';
               
               setTimeout(() => {
                 if (sheetRef.current) {
-                  sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.33, 1, 0.68, 1)';
+                  // Quicker settle time
+                  sheetRef.current.style.transition = 'transform 120ms cubic-bezier(0.4, 0, 0.2, 1)';
                   sheetRef.current.style.transform = 'translateY(0)';
                 }
-              }, 300);
+              }, 280); // Match the initial spring duration
             }
           });
         }
@@ -233,11 +236,12 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   const handleCloseSheet = useCallback(() => {
     if (!sheetRef.current) return;
     
-    const duration = 300;
+    const duration = 240; // Faster overall duration
     const currentHeight = sheetRef.current.offsetHeight;
     
     sheetRef.current.style.height = `${currentHeight}px`;
-    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1), height ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    // Standard material easing for smooth exit
+    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1), height ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
     
     void sheetRef.current.offsetHeight;
     
