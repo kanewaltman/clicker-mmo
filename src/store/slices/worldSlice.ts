@@ -59,14 +59,18 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
     // Save position to user progress
     const store = get() as any;
     if (store.user) {
-      store.position = { x, y };
       store.saveUserProgress();
     }
   },
   
-  addResources: (amount) => set((state) => ({ 
-    resources: state.resources + amount 
-  })),
+  addResources: (amount) => {
+    set((state) => ({ resources: state.resources + amount }));
+    // Save resources to user progress
+    const store = get() as any;
+    if (store.user) {
+      store.saveUserProgress();
+    }
+  },
 
   loadWorldResources: async () => {
     try {
@@ -141,7 +145,6 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
           // Save progress after collecting resources
           const store = get() as any;
           if (store.user) {
-            store.resources = get().resources + currentResource.value_per_click;
             store.saveUserProgress();
           }
 
@@ -184,7 +187,6 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
           // Save progress after collecting resources
           const store = get() as any;
           if (store.user) {
-            store.resources = get().resources + currentResource.value_per_click;
             store.saveUserProgress();
           }
         }
@@ -207,7 +209,6 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
     // Save position after teleporting
     const store = get() as any;
     if (store.user) {
-      store.position = { x: 0, y: 0 };
       store.saveUserProgress();
     }
   }

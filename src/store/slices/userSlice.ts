@@ -10,7 +10,7 @@ export interface UserState {
   hideCursorWhilePanning: boolean;
   progressId: string | null;
   resources: number;
-  position: WorldPosition;
+  position: WorldPosition | null;
   setUser: (user: any | null) => void;
   setUsername: (name: string) => void;
   setCursorEmoji: (emoji: string) => void;
@@ -28,7 +28,7 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
   hideCursorWhilePanning: false,
   progressId: null,
   resources: 0,
-  position: { x: 0, y: 0 },
+  position: null,
 
   setUser: (user) => {
     set({ user });
@@ -36,7 +36,7 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
       set({
         progressId: null,
         resources: 0,
-        position: { x: 0, y: 0 }
+        position: null
       });
     }
   },
@@ -101,7 +101,7 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
   },
 
   saveUserProgress: async () => {
-    const { user, progressId, username, resources, position } = get();
+    const { user, progressId, username, resources, position, worldPosition } = get() as any;
     if (!user) return;
 
     try {
@@ -109,8 +109,8 @@ export const createUserSlice: StateCreator<UserState> = (set, get) => ({
         user_id: user.id,
         username,
         resources,
-        position_x: position.x,
-        position_y: position.y,
+        position_x: worldPosition.x,
+        position_y: worldPosition.y,
         updated_at: new Date().toISOString()
       };
 
