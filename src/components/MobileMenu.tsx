@@ -1,12 +1,11 @@
-import React, { useRef, useCallback, useEffect, useState } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   LayoutGridIcon as GridFill,
   UsersIcon as UsersFill,
   GlobeIcon as GlobeFill,
   TrophyIcon as TrophyFill,
   SettingsIcon as SettingsFill,
-  MessageSquareIcon as MessageSquareFill,
-  ArrowLeftIcon
+  MessageSquareIcon as MessageSquareFill
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 
@@ -130,6 +129,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { teleportToCastle, resources } = useGameStore();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const viewsContainerRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);
   const dragCurrentY = useRef(0);
   const isDragging = useRef(false);
@@ -168,6 +168,33 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       setIsOpen(false);
     }
   };
+
+  const handleViewTransition = useCallback((view: MenuView) => {
+    if (isTransitioning || !viewsContainerRef.current || !sheetRef.current) return;
+    setIsTransitioning(true);
+
+    const direction = view === 'main' ? -1 : 1;
+    const container = viewsContainerRef.current;
+    
+    // Set initial positions
+    container.style.transform = 'translateX(0)';
+    container.style.transition = 'none';
+    
+    // Force reflow
+    void container.offsetHeight;
+
+    // Start transition
+    container.style.transition = 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)';
+    container.style.transform = `translateX(${-direction * 100}%)`;
+
+    // Update view after animation
+    setTimeout(() => {
+      setCurrentView(view);
+      container.style.transition = 'none';
+      container.style.transform = 'translateX(0)';
+      setIsTransitioning(false);
+    }, 300);
+  }, [isTransitioning]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
@@ -240,7 +267,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       };
       
       sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
-      
       setTimeout(cleanup, duration + 100);
     } else {
       sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
@@ -255,63 +281,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     e.stopPropagation();
     setIsOpen(true);
   }, []);
-
-  const handleViewTransition = useCallback((view: MenuView) => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    
-    if (sheetRef.current) {
-      // Get both current and target view contents
-      const currentContent = sheetRef.current.querySelector(
-        `[data-view="${currentView}"]`
-      ) as HTMLElement;
-      const targetContent = sheetRef.current.querySelector(
-        `[data-view="${view}"]`
-      ) as HTMLElement;
-      
-      if (currentContent && targetContent) {
-        // Set initial height to current content height
-        const currentHeight = currentContent.offsetHeight;
-        sheetRef.current.style.height = `${currentHeight}px`;
-        
-        // Force a reflow to ensure the initial height is applied
-        void sheetRef.current.offsetHeight;
-        
-        // Make target content temporarily visible but not interactive
-        targetContent.style.opacity = '0';
-        targetContent.style.position = 'static';
-        targetContent.style.visibility = 'visible';
-        targetContent.style.pointerEvents = 'none';
-        
-        // Get the target height
-        const targetHeight = targetContent.offsetHeight;
-        
-        // Reset target content styles
-        targetContent.style.opacity = '';
-        targetContent.style.position = '';
-        targetContent.style.visibility = '';
-        targetContent.style.pointerEvents = '';
-        
-        // Start transition
-        sheetRef.current.style.transition = 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1), height 150ms cubic-bezier(0.4, 0, 0.2, 1)';
-        sheetRef.current.style.height = `${targetHeight}px`;
-        
-        // Switch views after height transition starts
-        requestAnimationFrame(() => {
-          setCurrentView(view);
-        });
-        
-        // Reset to auto height after transition
-        setTimeout(() => {
-          if (sheetRef.current) {
-            sheetRef.current.style.height = 'auto';
-            sheetRef.current.style.transition = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
-          }
-          setIsTransitioning(false);
-        }, 150);
-      }
-    }
-  }, [isTransitioning, currentView]);
 
   const handleCloseSheet = useCallback(() => {
     if (!sheetRef.current) return;
@@ -330,7 +299,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     };
     
     sheetRef.current.addEventListener('transitionend', cleanup, { once: true });
-    setTimeout(cleanup, duration + 100); // Fallback cleanup
+    setTimeout(cleanup, duration + 100);
   }, []);
 
   useEffect(() => {
@@ -381,7 +350,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         `}
         onClick={e => e.stopPropagation()}
         style={{ 
-          willChange: 'transform, height',
+          willChange: 'transform',
           touchAction: 'none',
           transform: 'translate3d(0, 120%, 0)',
           transition: 'transform 200ms ease-out'
@@ -398,62 +367,50 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
           <div className="relative">
             <Header currentView={currentView} />
 
-            <div 
-              data-view="main"
-              className={`
-                w-full px-4 pb-4
-                transition-opacity duration-150 ease-in-out
-                ${currentView === 'main' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-                ${currentView !== 'main' && 'absolute top-0 left-0'}
-              `}
-            >
-              <div className="flex flex-col w-full">
-                <MenuItem 
-                  label="Inventory" 
-                  icon={<GridFill size={20} />} 
-                  onClick={() => handleViewTransition('inventory')}
-                  isFirst
-                  variant={menuVariant}
-                />
-                <MenuItem 
-                  label="Social" 
-                  icon={<UsersFill size={20} />}
-                  variant={menuVariant}
-                />
-                <MenuItem 
-                  label="World Map" 
-                  icon={<GlobeFill size={20} />}
-                  onClick={resources > 0 ? handleTeleport : undefined}
-                  variant={menuVariant}
-                />
-                <MenuItem 
-                  label="Leaderboard" 
-                  icon={<TrophyFill size={20} />}
-                  variant={menuVariant}
-                />
-                <MenuItem 
-                  label="Preferences" 
-                  icon={<SettingsFill size={20} />}
-                  onClick={onOpenSettings}
-                  isLast
-                  variant={menuVariant}
-                />
-              </div>
-            </div>
-
-            <div 
-              data-view="inventory"
-              className={`
-                w-full px-4 pb-4
-                transition-opacity duration-150 ease-in-out
-                ${currentView === 'inventory' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-                ${currentView !== 'inventory' && 'absolute top-0 left-0'}
-              `}
-            >
-              <InventoryGrid />
-              <div className="mt-4">
-                <InventoryActions onBack={() => handleViewTransition('main')} />
-              </div>
+            <div ref={viewsContainerRef} className="relative">
+              {currentView === 'main' ? (
+                <div className="px-4 pb-4">
+                  <div className="flex flex-col w-full">
+                    <MenuItem 
+                      label="Inventory" 
+                      icon={<GridFill size={20} />} 
+                      onClick={() => handleViewTransition('inventory')}
+                      isFirst
+                      variant={menuVariant}
+                    />
+                    <MenuItem 
+                      label="Social" 
+                      icon={<UsersFill size={20} />}
+                      variant={menuVariant}
+                    />
+                    <MenuItem 
+                      label="World Map" 
+                      icon={<GlobeFill size={20} />}
+                      onClick={resources > 0 ? handleTeleport : undefined}
+                      variant={menuVariant}
+                    />
+                    <MenuItem 
+                      label="Leaderboard" 
+                      icon={<TrophyFill size={20} />}
+                      variant={menuVariant}
+                    />
+                    <MenuItem 
+                      label="Preferences" 
+                      icon={<SettingsFill size={20} />}
+                      onClick={onOpenSettings}
+                      isLast
+                      variant={menuVariant}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pb-4">
+                  <InventoryGrid />
+                  <div className="mt-4">
+                    <InventoryActions onBack={() => handleViewTransition('main')} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -461,3 +418,5 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     </>
   );
 };
+
+export default MobileMenu;
