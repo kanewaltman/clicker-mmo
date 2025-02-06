@@ -210,11 +210,20 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       const targetHeight = viewHeightCache.current[view];
       
       sheetRef.current.style.height = `${currentHeight}px`;
-      sheetRef.current.style.transition = 'height 300ms cubic-bezier(0.4, 0, 0.2, 1)';
+      // Apply the same smooth animation curve to height transitions
+      sheetRef.current.style.transition = 'height 280ms cubic-bezier(0.32, 1.75, 0.65, 0.88)';
       
       void sheetRef.current.offsetHeight;
       
       sheetRef.current.style.height = `${targetHeight}px`;
+
+      // Add a settle animation for height
+      setTimeout(() => {
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = 'height 120ms cubic-bezier(0.4, 0, 0.2, 1)';
+          sheetRef.current.style.height = `${targetHeight}px`;
+        }
+      }, 280);
     }
     
     container.style.transform = 'translateX(0)';
@@ -222,7 +231,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     
     void container.offsetHeight;
 
-    container.style.transition = 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)';
+    container.style.transition = 'transform 280ms cubic-bezier(0.32, 1.75, 0.65, 0.88)';
     container.style.transform = `translateX(${-direction * 100}%)`;
 
     setTimeout(() => {
@@ -230,7 +239,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       container.style.transition = 'none';
       container.style.transform = 'translateX(0)';
       setIsTransitioning(false);
-    }, 300);
+    }, 280);
   }, [isTransitioning]);
 
   const handleCloseSheet = useCallback(() => {
