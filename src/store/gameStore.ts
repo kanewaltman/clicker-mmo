@@ -33,7 +33,8 @@ const useGameStore = create<GameState>()(
         username: state.username,
         cursorEmoji: state.cursorEmoji,
         afkTimeout: state.afkTimeout,
-        hideCursorWhilePanning: state.hideCursorWhilePanning
+        hideCursorWhilePanning: state.hideCursorWhilePanning,
+        worldPosition: state.worldPosition
       })
     }
   )
@@ -45,7 +46,11 @@ supabase.auth.onAuthStateChange((event, session) => {
   
   if (event === 'SIGNED_IN') {
     store.setUser(session?.user ?? null);
-    store.loadUserProgress();
+    store.loadUserProgress().then(() => {
+      if (store.position) {
+        store.setWorldPosition(store.position.x, store.position.y);
+      }
+    });
   } else if (event === 'SIGNED_OUT') {
     store.setUser(null);
   }

@@ -26,6 +26,7 @@ import type { Structure as StructureType, WorldResource } from '../store/gameSto
 
 const World: React.FC = () => {
   const initRef = useRef(false);
+  const positionInitRef = useRef(false);
   const userId = useRef(crypto.randomUUID()).current;
   const gameStore = useGameStore();
 
@@ -68,7 +69,13 @@ const World: React.FC = () => {
       };
       initializeGameState();
     }
-  }, []);
+
+    // Set initial position from user's saved position
+    if (!positionInitRef.current && gameStore.position) {
+      positionInitRef.current = true;
+      gameStore.setWorldPosition(gameStore.position.x, gameStore.position.y);
+    }
+  }, [gameStore.position]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
