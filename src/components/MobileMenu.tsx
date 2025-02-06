@@ -137,6 +137,35 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   const lastTouchY = useRef(0);
   const lastTouchTime = useRef(0);
   const animationFrameRef = useRef<number>();
+  const viewHeightCache = useRef<Record<MenuView, number>>({
+    main: 0,
+    inventory: 0
+  });
+
+  // Cache initial view heights
+  useEffect(() => {
+    const cacheViewHeights = () => {
+      const mainView = document.querySelector('.main-view-content');
+      const inventoryView = document.querySelector('.inventory-view-content');
+
+      if (mainView) {
+        viewHeightCache.current.main = mainView.getBoundingClientRect().height + 56;
+      }
+      if (inventoryView) {
+        viewHeightCache.current.inventory = inventoryView.getBoundingClientRect().height + 56;
+      }
+    };
+
+    // Initial cache
+    cacheViewHeights();
+
+    // Update cache on resize
+    const resizeObserver = new ResizeObserver(cacheViewHeights);
+    const views = document.querySelectorAll('.main-view-content, .inventory-view-content');
+    views.forEach(view => resizeObserver.observe(view));
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -175,6 +204,20 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
 
     const direction = view === 'main' ? -1 : 1;
     const container = viewsContainerRef.current;
+    
+    // Animate height before content transition
+    if (sheetRef.current) {
+      const currentHeight = sheetRef.current.offsetHeight;
+      const targetHeight = viewHeightCache.current[view];
+      
+      sheetRef.current.style.height = `${currentHeight}px`;
+      sheetRef.current.style.transition = 'height 300ms cubic-bezier(0.4, 0, 0.2, 1)';
+      
+      // Force reflow
+      void sheetRef.current.offsetHeight;
+      
+      sheetRef.current.style.height = `${targetHeight}px`;
+    }
     
     // Set initial positions
     container.style.transform = 'translateX(0)';
@@ -353,7 +396,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
           willChange: 'transform',
           touchAction: 'none',
           transform: 'translate3d(0, 120%, 0)',
-          transition: 'transform 200ms ease-out'
+          transition: 'transform 200ms ease-out',
+          height: viewHeightCache.current[currentView] || 'auto'
         }}
       >
         <div 
@@ -369,7 +413,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
 
             <div ref={viewsContainerRef} className="relative">
               {currentView === 'main' ? (
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-16 main-view-content">
                   <div className="flex flex-col w-full">
                     <MenuItem 
                       label="Inventory" 
@@ -404,7 +448,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
                   </div>
                 </div>
               ) : (
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-16 inventory-view-content">
                   <InventoryGrid />
                   <div className="mt-4">
                     <InventoryActions onBack={() => handleViewTransition('main')} />
