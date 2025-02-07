@@ -71,8 +71,10 @@ export const DesktopMenu: React.FC<DesktopMenuProps> = ({
   }, [dispatch]);
 
   const handleCloseSheet = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     if (!sheetRef.current) return;
     
@@ -94,8 +96,10 @@ export const DesktopMenu: React.FC<DesktopMenuProps> = ({
   }, [isTransitioning, menuState.view, handleViewTransition, dispatch]);
 
   const handleBack = useCallback((e?: React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     if (isTransitioning || menuState.history.length === 0) return;
     setIsTransitioning(true);
@@ -197,8 +201,10 @@ export const DesktopMenu: React.FC<DesktopMenuProps> = ({
                   onNavigate={handleNavigate}
                   onOpenSettings={onOpenSettings}
                   onTeleport={(e?: React.MouseEvent) => {
-                    e?.preventDefault();
-                    e?.stopPropagation();
+                    if (e) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
                     if (resources > 0) {
                       teleportToCastle();
                       handleCloseSheet();
