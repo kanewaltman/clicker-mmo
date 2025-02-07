@@ -17,6 +17,7 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
   const touchStartScrollTop = useRef(0);
   const touchDirectionLocked = useRef(false);
   const initialScrollDirection = useRef<'up' | 'down' | null>(null);
+  const isScrollable = useRef(false);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
@@ -35,10 +36,13 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
     touchDirectionLocked.current = false;
     initialScrollDirection.current = null;
 
-    // Store initial scroll position of scrollable content
+    // Check if content is scrollable
     const scrollableContent = target.closest('.overflow-y-auto');
     if (scrollableContent instanceof HTMLElement) {
       touchStartScrollTop.current = scrollableContent.scrollTop;
+      isScrollable.current = scrollableContent.scrollHeight > scrollableContent.clientHeight;
+    } else {
+      isScrollable.current = false;
     }
 
     // Find the sheet element
@@ -63,47 +67,56 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
 
     // Handle scrollable content
     if (scrollableContent instanceof HTMLElement) {
-      const isAtTop = scrollableContent.scrollTop === 0;
+      const isAtTop = scrollableContent.scrollTop <= 0;
       const isAtBottom = Math.abs(
         scrollableContent.scrollHeight - scrollableContent.scrollTop - scrollableContent.clientHeight
-      ) < 1;
+      ) <= 1;
 
-      // Lock scroll direction after initial movement
-      if (!touchDirectionLocked.current && Math.abs(deltaY) > 10) {
-        touchDirectionLocked.current = true;
+      // If content is not scrollable, treat as sheet movement
+      if (!isScrollable.current) {
+        if (deltaY > 0) { // Pulling down
+          dragCurrentY.current = deltaY;
+        } else {
+          const resistance = 3 + (Math.abs(deltaY) / 50);
+          dragCurrentY.current = deltaY / resistance;
+        }
+      }
+      // Content is scrollable
+      else {
+        // Lock scroll direction after initial movement
+        if (!touchDirectionLocked.current && Math.abs(deltaY) > 10) {
+          touchDirectionLocked.current = true;
 
-        // If starting scroll down and not at top, lock to scroll
-        if (deltaY > 0 && !isAtTop) {
-          hasScrolled.current = true;
-          isDragging.current = false;
-          return;
+          // If pulling down and at top, lock to sheet movement
+          if (deltaY > 0 && isAtTop) {
+            hasScrolled.current = false;
+          }
+          // Otherwise lock to scroll
+          else {
+            hasScrolled.current = true;
+            isDragging.current = false;
+            return;
+          }
         }
 
-        // If starting scroll up and not at bottom, lock to scroll
-        if (deltaY < 0 && !isAtBottom) {
+        // Allow sheet movement only when at top and pulling down
+        if (isAtTop && deltaY > 0) {
+          dragCurrentY.current = deltaY;
+          hasScrolled.current = false;
+        } else {
           hasScrolled.current = true;
           isDragging.current = false;
           return;
         }
       }
-
-      // Prevent sheet movement if we're scrolling content
-      if (hasScrolled.current) return;
-
-      // Only allow pull-to-close when at the top and pulling down
-      if (!isAtTop && deltaY > 0) {
-        isDragging.current = false;
-        return;
-      }
-    }
-
-    // Handle sheet movement
-    if (deltaY < 0) {
-      const absUpwardDelta = Math.abs(deltaY);
-      const resistance = 3 + (absUpwardDelta / 50);
-      dragCurrentY.current = deltaY / resistance;
     } else {
-      dragCurrentY.current = deltaY;
+      // No scrollable content, handle sheet movement
+      if (deltaY > 0) {
+        dragCurrentY.current = deltaY;
+      } else {
+        const resistance = 3 + (Math.abs(deltaY) / 50);
+        dragCurrentY.current = deltaY / resistance;
+      }
     }
 
     lastTouchY.current = touch.clientY;
@@ -129,13 +142,13 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
     const touchDistance = e.changedTouches[0].clientY - lastTouchY.current;
     const velocity = touchDistance / touchDuration;
     
-    const threshold = window.innerHeight * 0.05;
+    const threshold = window.innerHeight * 0.15; // Increased threshold
     
     // Find the sheet element
     const sheet = e.currentTarget.closest('[role="navigation"]');
     if (!(sheet instanceof HTMLElement)) return;
 
-    if (dragCurrentY.current > threshold || velocity > 0.2) {
+    if (dragCurrentY.current > threshold || velocity > 0.5) { // Increased velocity threshold
       const duration = Math.min(Math.abs(velocity) * 500, 300);
       sheet.style.transition = `transform ${duration}ms cubic-bezier(0.33, 1, 0.68, 1)`;
       sheet.style.transform = 'translate3d(0, 100%, 0)';
