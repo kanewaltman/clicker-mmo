@@ -7,7 +7,7 @@ interface UserProfileProps {
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
-  const { username, resources, cursorEmoji, user } = useGameStore();
+  const { username, resources, cursorEmoji } = useGameStore();
   
   return (
     <button 
@@ -17,7 +17,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onNavigate }) => {
       <div className="text-2xl">{cursorEmoji}</div>
       <div className="flex flex-col justify-center py-1 min-w-0 text-left">
         <div className="text-lg tracking-normal text-white truncate">{username}</div>
-        <div className="text-xs tracking-normal text-amber-300 truncate">💰 {resources}</div>
+        <div className="text-xs tracking-normal text-amber-300 truncate">{resources} 💰</div>
       </div>
     </button>
   );

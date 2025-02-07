@@ -8,7 +8,6 @@ import { StructureState, createStructureSlice } from './slices/structureSlice';
 interface GameState extends UserState, WorldState, StructureState {}
 
 let saveTimeout: number | null = null;
-let authInitialized = false;
 
 const debouncedSave = (store: GameState) => {
   if (saveTimeout) {
@@ -41,56 +40,21 @@ const useGameStore = create<GameState>()(
   )
 );
 
-// Initialize auth state
-const initializeAuth = async () => {
-  if (authInitialized) return;
-  
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const store = useGameStore.getState();
-    
-    if (session?.user) {
-      store.setUser(session.user);
-      await store.loadUserProgress();
-      if (store.position) {
-        store.setWorldPosition(store.position.x, store.position.y);
-      }
-    } else {
-      store.setUser(null);
-    }
-  } catch (error) {
-    console.error('Error initializing auth:', error);
-    const store = useGameStore.getState();
-    store.setUser(null);
-  } finally {
-    authInitialized = true;
-  }
-};
-
 // Set up Supabase auth state sync
-supabase.auth.onAuthStateChange(async (event, session) => {
+supabase.auth.onAuthStateChange((event, session) => {
   const store = useGameStore.getState();
   
-  try {
-    if (event === 'SIGNED_IN') {
-      store.setUser(session?.user ?? null);
-      await store.loadUserProgress();
+  if (event === 'SIGNED_IN') {
+    store.setUser(session?.user ?? null);
+    store.loadUserProgress().then(() => {
       if (store.position) {
         store.setWorldPosition(store.position.x, store.position.y);
       }
-    } else if (event === 'SIGNED_OUT') {
-      store.setUser(null);
-      store.setResources(0);
-      store.setWorldPosition(0, 0);
-    }
-  } catch (error) {
-    console.error('Error handling auth state change:', error);
+    });
+  } else if (event === 'SIGNED_OUT') {
     store.setUser(null);
   }
 });
-
-// Initialize auth on load
-initializeAuth().catch(console.error);
 
 // Set up Supabase realtime subscriptions
 const resourceChannel = supabase
@@ -161,9 +125,72 @@ const resourceChannel = supabase
   )
   .subscribe();
 
+const structureChannel = supabase
+  .channel('structure-changes')
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'structures'
+    },
+    async (payload) => {
+      const store = useGameStore.getState();
+      
+      switch (payload.eventType) {
+        case 'DELETE': {
+          store.syncStructures(
+            store.structures.filter(s => s.id !== payload.old.id)
+          );
+          break;
+        }
+        case 'UPDATE': {
+          const updatedStructure = {
+            id: payload.new.id,
+            type: payload.new.type,
+            position: {
+              x: payload.new.position_x,
+              y: payload.new.position_y
+            },
+            owner: payload.new.owner,
+            health: payload.new.health,
+            lastGather: new Date(payload.new.last_gather).getTime()
+          };
+          
+          store.syncStructures(
+            store.structures.map(s => 
+              s.id === updatedStructure.id ? updatedStructure : s
+            )
+          );
+          break;
+        }
+        case 'INSERT': {
+          const newStructure = {
+            id: payload.new.id,
+            type: payload.new.type,
+            position: {
+              x: payload.new.position_x,
+              y: payload.new.position_y
+            },
+            owner: payload.new.owner,
+            health: payload.new.health,
+            lastGather: new Date(payload.new.last_gather).getTime()
+          };
+          
+          if (!store.structures.some(s => s.id === newStructure.id)) {
+            store.syncStructures([...store.structures, newStructure]);
+          }
+          break;
+        }
+      }
+    }
+  )
+  .subscribe();
+
 // Cleanup on window unload
 window.addEventListener('unload', () => {
   resourceChannel.unsubscribe();
+  structureChannel.unsubscribe();
   if (saveTimeout) {
     window.clearTimeout(saveTimeout);
   }

@@ -14,46 +14,28 @@ interface LeaderboardViewProps {
 
 export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { user } = useGameStore();
 
   useEffect(() => {
-    let mounted = true;
-    let channel: any;
-
     const fetchLeaders = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        const { data, error: fetchError } = await supabase
-          .from('user_progress')
-          .select('resources, user_id, username')
-          .order('resources', { ascending: false });
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('resources, user_id, username')
+        .order('resources', { ascending: false });
 
-        if (fetchError) throw fetchError;
-
-        if (mounted) {
-          setLeaders(data || []);
-        }
-      } catch (error) {
+      if (error) {
         console.error('Error fetching leaderboard:', error);
-        if (mounted) {
-          setError('Failed to load leaderboard');
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
+        return;
       }
+
+      setLeaders(data || []);
     };
 
     // Initial fetch
     fetchLeaders();
 
     // Subscribe to changes
-    channel = supabase
+    const channel = supabase
       .channel('all-time-leaders')
       .on(
         'postgres_changes',
@@ -63,18 +45,13 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
           table: 'user_progress'
         },
         () => {
-          if (mounted) {
-            fetchLeaders();
-          }
+          fetchLeaders();
         }
       )
       .subscribe();
 
     return () => {
-      mounted = false;
-      if (channel) {
-        channel.unsubscribe();
-      }
+      channel.unsubscribe();
     };
   }, []);
 
@@ -90,41 +67,32 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
         {/* Scrollable content */}
         <div className="flex flex-col w-full max-h-[280px] overflow-y-auto">
           <div className="flex flex-col w-full min-h-full pt-4 pb-4">
-            {isLoading ? (
-              <div className="bg-white/[0.03] rounded-[16px] p-4 text-gray-400 text-center">
-                Loading leaderboard...
-              </div>
-            ) : error ? (
-              <div className="bg-white/[0.03] rounded-[16px] p-4 text-red-400 text-center">
-                {error}
-              </div>
-            ) : leaders.length > 0 ? (
-              leaders.map((leader, index, array) => (
-                <button
-                  key={leader.user_id}
-                  className={`
-                    flex justify-between items-center w-full
-                    bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06]
-                    transition-all duration-200 ease-in-out p-3
-                    ${index === 0 ? 'rounded-t-[16px]' : ''}
-                    ${index === array.length - 1 ? 'rounded-b-[16px]' : ''}
-                    ${index !== array.length - 1 ? 'mb-[2px]' : ''}
-                    ${leader.user_id === user?.id ? 'bg-blue-500/20' : ''}
-                    group
-                  `}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-amber-300 font-bold w-6 text-sm">{index + 1}.</div>
-                    <div className="font-semibold tracking-normal text-white text-sm truncate transition-transform duration-200 ease-in-out group-hover:translate-x-2">
-                      {leader.username || `Player ${index + 1}`}
-                    </div>
+            {leaders.map((leader, index, array) => (
+              <button
+                key={leader.user_id}
+                className={`
+                  flex justify-between items-center w-full
+                  bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06]
+                  transition-all duration-200 ease-in-out p-3
+                  ${index === 0 ? 'rounded-t-[16px]' : ''}
+                  ${index === array.length - 1 ? 'rounded-b-[16px]' : ''}
+                  ${index !== array.length - 1 ? 'mb-[2px]' : ''}
+                  ${leader.user_id === user?.id ? 'bg-blue-500/20' : ''}
+                  group
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="text-amber-300 font-bold w-6 text-sm">{index + 1}.</div>
+                  <div className="font-semibold tracking-normal text-white text-sm truncate transition-transform duration-200 ease-in-out group-hover:translate-x-2">
+                    {leader.username || `Player ${index + 1}`}
                   </div>
-                  <div className="text-amber-300 font-semibold text-sm whitespace-nowrap">
-                    {leader.resources} 💰
-                  </div>
-                </button>
-              ))
-            ) : (
+                </div>
+                <div className="text-amber-300 font-semibold text-sm whitespace-nowrap">
+                  {leader.resources} 💰
+                </div>
+              </button>
+            ))}
+            {leaders.length === 0 && (
               <div className="bg-white/[0.03] rounded-[16px] p-4 text-gray-400 text-center">
                 No scores yet
               </div>
