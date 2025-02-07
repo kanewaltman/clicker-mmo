@@ -57,38 +57,47 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
 
   return (
     <div className="px-4 pb-16 leaderboard-view-content">
-      <div className="flex flex-col w-full max-h-[280px] overflow-y-auto">
-        <div className="flex flex-col w-full min-h-full">
-          {leaders.map((leader, index, array) => (
-            <button
-              key={leader.user_id}
-              className={`
-                flex justify-between items-center w-full
-                bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06]
-                transition-all duration-200 ease-in-out p-3
-                ${index === 0 ? 'rounded-t-[16px]' : ''}
-                ${index === array.length - 1 ? 'rounded-b-[16px]' : ''}
-                ${index !== array.length - 1 ? 'mb-[2px]' : ''}
-                ${leader.user_id === user?.id ? 'bg-blue-500/20' : ''}
-                group
-              `}
-            >
-              <div className="flex items-center gap-3">
-                <div className="text-amber-300 font-bold w-6 text-sm">{index + 1}.</div>
-                <div className="font-semibold tracking-normal text-white text-sm truncate transition-transform duration-200 ease-in-out group-hover:translate-x-2">
-                  {leader.username || `Player ${index + 1}`}
+      <div className="relative">
+        {/* Top fade */}
+        <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-[#1E1E1E] to-transparent pointer-events-none z-10" />
+        
+        {/* Bottom fade */}
+        <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[#1E1E1E] to-transparent pointer-events-none z-10" />
+        
+        {/* Scrollable content */}
+        <div className="flex flex-col w-full max-h-[280px] overflow-y-auto">
+          <div className="flex flex-col w-full min-h-full pt-4 pb-4">
+            {leaders.map((leader, index, array) => (
+              <button
+                key={leader.user_id}
+                className={`
+                  flex justify-between items-center w-full
+                  bg-white/[0.03] hover:bg-white/[0.05] active:bg-white/[0.06]
+                  transition-all duration-200 ease-in-out p-3
+                  ${index === 0 ? 'rounded-t-[16px]' : ''}
+                  ${index === array.length - 1 ? 'rounded-b-[16px]' : ''}
+                  ${index !== array.length - 1 ? 'mb-[2px]' : ''}
+                  ${leader.user_id === user?.id ? 'bg-blue-500/20' : ''}
+                  group
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="text-amber-300 font-bold w-6 text-sm">{index + 1}.</div>
+                  <div className="font-semibold tracking-normal text-white text-sm truncate transition-transform duration-200 ease-in-out group-hover:translate-x-2">
+                    {leader.username || `Player ${index + 1}`}
+                  </div>
                 </div>
+                <div className="text-amber-300 font-semibold text-sm whitespace-nowrap">
+                  {leader.resources} 💰
+                </div>
+              </button>
+            ))}
+            {leaders.length === 0 && (
+              <div className="bg-white/[0.03] rounded-[16px] p-4 text-gray-400 text-center">
+                No scores yet
               </div>
-              <div className="text-amber-300 font-semibold text-sm whitespace-nowrap">
-                {leader.resources} 💰
-              </div>
-            </button>
-          ))}
-          {leaders.length === 0 && (
-            <div className="bg-white/[0.03] rounded-[16px] p-4 text-gray-400 text-center">
-              No scores yet
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
