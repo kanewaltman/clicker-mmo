@@ -76,6 +76,9 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
 
   // Handle touch events
   const handleTouchStart = (e: React.TouchEvent) => {
+    // Stop event from propagating to the bottom sheet
+    e.stopPropagation();
+
     if (e.touches.length === 1) {
       // Single touch for panning
       const touch = e.touches[0];
@@ -92,6 +95,9 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    // Stop event from propagating to the bottom sheet
+    e.stopPropagation();
+
     if (isDragging && e.touches.length === 1 && lastTouchRef.current) {
       const touch = e.touches[0];
       const deltaX = touch.clientX - lastTouchRef.current.x;
@@ -118,7 +124,10 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    // Stop event from propagating to the bottom sheet
+    e.stopPropagation();
+
     lastTouchRef.current = null;
     lastPinchDistanceRef.current = null;
     setIsDragging(false);
@@ -126,11 +135,17 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
 
   // Handle mouse events
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Stop event from propagating
+    e.stopPropagation();
+
     lastTouchRef.current = { x: e.clientX, y: e.clientY };
     setIsDragging(true);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Stop event from propagating
+    e.stopPropagation();
+
     if (!isDragging || !lastTouchRef.current) return;
 
     const deltaX = e.clientX - lastTouchRef.current.x;
@@ -144,14 +159,20 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
     lastTouchRef.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
+    // Stop event from propagating
+    e.stopPropagation();
+
     lastTouchRef.current = null;
     setIsDragging(false);
   };
 
   // Handle wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
+    // Stop event from propagating
+    e.stopPropagation();
     e.preventDefault();
+
     const delta = e.deltaY * -0.001;
     const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
     setZoom(newZoom);
