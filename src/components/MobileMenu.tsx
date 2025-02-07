@@ -5,6 +5,9 @@ import { MainView } from './ui/menu/views/MainView';
 import { InventoryView } from './ui/menu/views/InventoryView';
 import { SocialView } from './ui/menu/views/SocialView';
 import { LeaderboardView } from './ui/menu/views/LeaderboardView';
+import { MoreView } from './ui/menu/views/MoreView';
+import { PreferencesView } from './ui/menu/views/PreferencesView';
+import { CursorsView } from './ui/menu/views/CursorsView';
 import { useMenuState } from './ui/menu/useMenuState';
 import { useMenuTransition } from './ui/menu/useMenuTransition';
 import { useTouchHandling } from './ui/menu/useTouchHandling';
@@ -27,7 +30,9 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     social: 0,
     map: 0,
     leaderboard: 0,
-    settings: 0
+    more: 0,
+    preferences: 0,
+    cursors: 0
   });
 
   const [menuState, dispatch] = useMenuState();
@@ -40,7 +45,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
   );
 
   const resetMenuState = useCallback(() => {
-    // Reset all view styles first
     if (viewsContainerRef.current) {
       const views = Array.from(viewsContainerRef.current.children) as HTMLElement[];
       views.forEach(view => {
@@ -55,7 +59,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
       });
     }
     
-    // Reset menu state
     dispatch({ type: 'RESET' });
     setIsTransitioning(false);
   }, [dispatch]);
@@ -197,7 +200,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
           <div className="flex self-center bg-zinc-300/10 h-[5px] rounded-[34px] w-[55px] mb-4" />
           
           <div className="relative">
-            <MenuHeader currentView={menuState.view} />
+            <MenuHeader currentView={menuState.view} onNavigate={handleNavigate} />
 
             <div ref={viewsContainerRef} className="relative">
               <div className={`main-view-content ${menuState.view !== 'main' ? 'hidden' : ''}`}>
@@ -221,6 +224,15 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
               </div>
               <div className={`leaderboard-view-content ${menuState.view !== 'leaderboard' ? 'hidden' : ''}`}>
                 <LeaderboardView onBack={handleBack} />
+              </div>
+              <div className={`more-view-content ${menuState.view !== 'more' ? 'hidden' : ''}`}>
+                <MoreView onBack={handleBack} onNavigate={handleNavigate} />
+              </div>
+              <div className={`preferences-view-content ${menuState.view !== 'preferences' ? 'hidden' : ''}`}>
+                <PreferencesView onBack={handleBack} />
+              </div>
+              <div className={`cursors-view-content ${menuState.view !== 'cursors' ? 'hidden' : ''}`}>
+                <CursorsView onBack={handleBack} />
               </div>
             </div>
           </div>

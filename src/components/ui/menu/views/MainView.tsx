@@ -4,7 +4,7 @@ import {
   UsersIcon,
   GlobeIcon,
   TrophyIcon,
-  SettingsIcon
+  MoreHorizontalIcon
 } from 'lucide-react';
 import { MenuItem } from '../MenuItem';
 import type { MenuView } from '../types';
@@ -53,9 +53,9 @@ export const MainView: React.FC<MainViewProps> = ({
           variant={menuVariant}
         />
         <MenuItem 
-          label="Preferences" 
-          icon={SettingsIcon}
-          onClick={onOpenSettings}
+          label="More" 
+          icon={MoreHorizontalIcon}
+          onClick={() => onNavigate('more')}
           isLast
           variant={menuVariant}
         />

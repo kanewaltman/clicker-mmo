@@ -1,4 +1,4 @@
-export type MenuView = 'main' | 'inventory' | 'social' | 'map' | 'leaderboard' | 'settings';
+export type MenuView = 'main' | 'inventory' | 'social' | 'map' | 'leaderboard' | 'more' | 'preferences' | 'cursors';
 
 export interface MenuTransitionOptions {
   duration?: number;
