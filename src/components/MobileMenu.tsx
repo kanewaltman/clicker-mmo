@@ -12,7 +12,6 @@ import { useMenuState } from './ui/menu/useMenuState';
 import { useMenuTransition } from './ui/menu/useMenuTransition';
 import { useTouchHandling } from './ui/menu/useTouchHandling';
 import type { MenuView } from './ui/menu/types';
-import { signInWithGoogle, signOut } from '../lib/auth';
 
 interface MobileMenuProps {
   onOpenShop: () => void;
@@ -22,7 +21,7 @@ interface MobileMenuProps {
 export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettings }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const { teleportToCastle, resources, user, setUser } = useGameStore();
+  const { teleportToCastle, resources } = useGameStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const viewsContainerRef = useRef<HTMLDivElement>(null);
   const viewHeightCache = useRef<Record<MenuView, number>>({
@@ -123,24 +122,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     setIsOpen(true);
   }, [resetMenuState]);
 
-  const handleSignIn = async () => {
-    try {
-      await signInWithGoogle();
-    } catch (error) {
-      console.error('Error signing in:', error);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      setUser(null);
-      handleCloseSheet();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
-
   useEffect(() => {
     if (isOpen && sheetRef.current) {
       requestAnimationFrame(() => {
@@ -219,13 +200,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
           <div className="flex self-center bg-zinc-300/10 h-[5px] rounded-[34px] w-[55px] mb-4" />
           
           <div className="relative">
-            <MenuHeader 
-              currentView={menuState.view} 
-              onNavigate={handleNavigate}
-              onSignIn={handleSignIn}
-              onSignOut={handleSignOut}
-              user={user}
-            />
+            <MenuHeader currentView={menuState.view} onNavigate={handleNavigate} />
 
             <div ref={viewsContainerRef} className="relative">
               <div className={`main-view-content ${menuState.view !== 'main' ? 'hidden' : ''}`}>
