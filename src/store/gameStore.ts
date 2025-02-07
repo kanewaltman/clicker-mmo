@@ -8,6 +8,7 @@ import { StructureState, createStructureSlice } from './slices/structureSlice';
 interface GameState extends UserState, WorldState, StructureState {}
 
 let saveTimeout: number | null = null;
+let authInitialized = false;
 
 const debouncedSave = (store: GameState) => {
   if (saveTimeout) {
@@ -40,21 +41,44 @@ const useGameStore = create<GameState>()(
   )
 );
 
+// Initialize auth state
+const initializeAuth = async () => {
+  if (authInitialized) return;
+  authInitialized = true;
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const store = useGameStore.getState();
+    
+    if (session?.user) {
+      store.setUser(session.user);
+      await store.loadUserProgress();
+      if (store.position) {
+        store.setWorldPosition(store.position.x, store.position.y);
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing auth:', error);
+  }
+};
+
 // Set up Supabase auth state sync
-supabase.auth.onAuthStateChange((event, session) => {
+supabase.auth.onAuthStateChange(async (event, session) => {
   const store = useGameStore.getState();
   
   if (event === 'SIGNED_IN') {
     store.setUser(session?.user ?? null);
-    store.loadUserProgress().then(() => {
-      if (store.position) {
-        store.setWorldPosition(store.position.x, store.position.y);
-      }
-    });
+    await store.loadUserProgress();
+    if (store.position) {
+      store.setWorldPosition(store.position.x, store.position.y);
+    }
   } else if (event === 'SIGNED_OUT') {
     store.setUser(null);
   }
 });
+
+// Initialize auth on load
+initializeAuth();
 
 // Set up Supabase realtime subscriptions
 const resourceChannel = supabase
