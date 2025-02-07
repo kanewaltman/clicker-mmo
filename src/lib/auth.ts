@@ -21,28 +21,30 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   try {
-    // Clear all local storage data first
-    const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname;
+    // First sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+
+    // Clear all Supabase-related localStorage data
+    const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname.split('.')[0];
+    const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith(prefix)) {
-        localStorage.removeItem(key);
+        keysToRemove.push(key);
       }
     }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
 
-    // Sign out from Supabase
-    const { error } = await supabase.auth.signOut({
-      scope: 'local'
-    });
-    if (error) throw error;
+    // Clear session storage as well
+    sessionStorage.clear();
 
-    // Force a clean reload after a brief delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-    window.location.replace(window.location.origin + window.location.pathname);
+    // Force a clean reload
+    window.location.href = window.location.origin + window.location.pathname;
   } catch (error) {
     console.error('Error signing out:', error);
     // Force reload even if there's an error
-    window.location.replace(window.location.origin + window.location.pathname);
+    window.location.href = window.location.origin + window.location.pathname;
   }
 }
 
@@ -50,13 +52,16 @@ export function subscribeToAuthChanges(callback: (session: any) => void) {
   return supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
       // Clear any remaining auth data
-      const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname;
+      const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname.split('.')[0];
+      const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key?.startsWith(prefix)) {
-          localStorage.removeItem(key);
+          keysToRemove.push(key);
         }
       }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      sessionStorage.clear();
     }
     callback(session);
   });
