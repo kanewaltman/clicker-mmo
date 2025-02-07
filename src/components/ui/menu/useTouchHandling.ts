@@ -12,6 +12,10 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
   const initialTouchY = useRef(0);
   const lastTouchY = useRef(0);
   const lastTouchTime = useRef(0);
+  const touchStartTarget = useRef<EventTarget | null>(null);
+  const hasScrolled = useRef(false);
+  const touchStartScrollTop = useRef(0);
+  const touchDirectionLocked = useRef(false);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
@@ -25,6 +29,15 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
     lastTouchTime.current = e.timeStamp;
     dragCurrentY.current = 0;
     isDragging.current = true;
+    touchStartTarget.current = target;
+    hasScrolled.current = false;
+    touchDirectionLocked.current = false;
+
+    // Store initial scroll position of scrollable content
+    const scrollableContent = target.closest('.overflow-y-auto');
+    if (scrollableContent) {
+      touchStartScrollTop.current = scrollableContent.scrollTop;
+    }
 
     // Find the sheet element
     const sheet = target.closest('[role="navigation"]');
@@ -39,7 +52,42 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
     e.stopPropagation();
     const touch = e.touches[0];
     const deltaY = touch.clientY - dragStartY.current;
+    const scrollableContent = (touchStartTarget.current as HTMLElement)?.closest('.overflow-y-auto');
     
+    // Determine scroll direction if not locked
+    if (!touchDirectionLocked.current) {
+      const absY = Math.abs(deltaY);
+      if (absY > 10) { // Add a small threshold before locking direction
+        touchDirectionLocked.current = true;
+        // If scrollable content exists and is not at top, or is at bottom
+        if (scrollableContent) {
+          const isAtTop = scrollableContent.scrollTop === 0;
+          const isAtBottom = scrollableContent.scrollHeight - scrollableContent.scrollTop === scrollableContent.clientHeight;
+          
+          // Allow vertical scrolling if content is scrollable and not at boundaries
+          if (!isAtTop && deltaY < 0) {
+            hasScrolled.current = true;
+            isDragging.current = false;
+            return;
+          }
+          
+          // Prevent dragging down if not at top
+          if (!isAtTop && deltaY > 0) {
+            hasScrolled.current = true;
+            isDragging.current = false;
+            return;
+          }
+
+          // Allow dragging up if at bottom
+          if (isAtBottom && deltaY < 0) {
+            hasScrolled.current = false;
+          }
+        }
+      }
+    }
+
+    if (hasScrolled.current) return;
+
     if (deltaY < 0) {
       const absUpwardDelta = Math.abs(deltaY);
       const resistance = 3 + (absUpwardDelta / 50);
@@ -64,6 +112,8 @@ export function useTouchHandling({ onClose, setIsOpen }: TouchHandlingOptions) {
     
     e.stopPropagation();
     isDragging.current = false;
+    hasScrolled.current = false;
+    touchDirectionLocked.current = false;
     
     const touchDuration = e.timeStamp - lastTouchTime.current;
     const touchDistance = e.changedTouches[0].clientY - lastTouchY.current;
