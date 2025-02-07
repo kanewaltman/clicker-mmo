@@ -12,7 +12,7 @@ export async function signInWithGoogle() {
         access_type: 'offline',
         prompt: 'consent',
       },
-      redirectTo: `${window.location.origin}/?time=${Date.now()}`,
+      redirectTo: window.location.origin,
       skipBrowserRedirect: true // Prevent automatic redirect
     }
   });
@@ -53,12 +53,14 @@ export async function signOut() {
 }
 
 export function subscribeToAuthChanges(callback: (session: any) => void) {
+  // Clean up URL if we have auth parameters
+  if (window.location.hash || window.location.search) {
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
   return supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN') {
-      // Clean up URL parameters after successful auth
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, cleanUrl);
-    } else if (event === 'SIGNED_OUT') {
+    if (event === 'SIGNED_OUT') {
       // Clear all storage on sign out
       localStorage.clear();
       sessionStorage.clear();
