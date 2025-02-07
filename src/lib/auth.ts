@@ -1,6 +1,10 @@
 import { supabase } from './supabase';
 
 export async function signInWithGoogle() {
+  // Clear any stale auth state first
+  localStorage.removeItem('supabase.auth.token');
+  sessionStorage.removeItem('supabase.auth.token');
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -8,11 +12,18 @@ export async function signInWithGoogle() {
         access_type: 'offline',
         prompt: 'consent',
       },
-      redirectTo: window.location.origin
+      redirectTo: `${window.location.origin}/?time=${Date.now()}`,
+      skipBrowserRedirect: true // Prevent automatic redirect
     }
   });
   
   if (error) throw error;
+
+  // Manually handle the redirect
+  if (data?.url) {
+    window.location.replace(data.url);
+  }
+  
   return data;
 }
 
