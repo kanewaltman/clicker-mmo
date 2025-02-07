@@ -205,7 +205,12 @@ export const createWorldSlice: StateCreator<WorldState> = (set, get) => ({
   },
 
   teleportToCastle: () => {
-    set({ worldPosition: { x: 0, y: 0 } });
+    // Calculate the center position by using positive half of viewport dimensions
+    // This moves the world in the opposite direction to center the castle
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    set({ worldPosition: { x: centerX, y: centerY } });
+    
     // Save position after teleporting
     const store = get() as any;
     if (store.user) {

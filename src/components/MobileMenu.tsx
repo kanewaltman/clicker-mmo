@@ -8,6 +8,7 @@ import { LeaderboardView } from './ui/menu/views/LeaderboardView';
 import { MoreView } from './ui/menu/views/MoreView';
 import { PreferencesView } from './ui/menu/views/PreferencesView';
 import { CursorsView } from './ui/menu/views/CursorsView';
+import { WorldMapView } from './ui/menu/views/WorldMapView';
 import { useMenuState } from './ui/menu/useMenuState';
 import { useMenuTransition } from './ui/menu/useMenuTransition';
 import { useTouchHandling } from './ui/menu/useTouchHandling';
@@ -32,7 +33,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     leaderboard: 0,
     more: 0,
     preferences: 0,
-    cursors: 0
+    cursors: 0,
+    worldmap: 0
   });
 
   const [menuState, dispatch] = useMenuState();
@@ -233,6 +235,9 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
               </div>
               <div className={`cursors-view-content ${menuState.view !== 'cursors' ? 'hidden' : ''}`}>
                 <CursorsView onBack={handleBack} />
+              </div>
+              <div className={`worldmap-view-content ${menuState.view !== 'worldmap' ? 'hidden' : ''}`}>
+                <WorldMapView onBack={handleBack} />
               </div>
             </div>
           </div>

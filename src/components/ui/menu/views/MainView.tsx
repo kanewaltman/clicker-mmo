@@ -43,7 +43,7 @@ export const MainView: React.FC<MainViewProps> = ({
         <MenuItem 
           label="World Map" 
           icon={GlobeIcon}
-          onClick={canTeleport ? onTeleport : undefined}
+          onClick={() => onNavigate('worldmap')}
           variant={menuVariant}
         />
         <MenuItem 
