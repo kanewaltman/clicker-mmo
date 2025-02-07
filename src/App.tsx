@@ -5,6 +5,7 @@ import { AuthButton } from './components/AuthButton';
 
 function App() {
   const resources = useGameStore((state) => state.resources);
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   return (
     <div className="h-screen w-screen flex flex-col">
@@ -13,7 +14,7 @@ function App() {
           <h1 className="text-2xl font-bold">Cursor Clicker MMO</h1>
           <div className="flex items-center gap-4">
             <span className="text-xl">💰 {resources}</span>
-            <AuthButton />
+            {!isMobile && <AuthButton />}
           </div>
         </div>
       </div>
