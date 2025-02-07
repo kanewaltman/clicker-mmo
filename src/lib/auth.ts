@@ -1,9 +1,6 @@
 import { supabase } from './supabase';
 
 export async function signInWithGoogle() {
-  const baseUrl = window.location.origin + window.location.pathname;
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -11,7 +8,7 @@ export async function signInWithGoogle() {
         access_type: 'offline',
         prompt: 'consent',
       },
-      redirectTo: isMobile ? baseUrl : window.location.origin
+      redirectTo: window.location.origin
     }
   });
   
