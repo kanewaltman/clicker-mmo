@@ -44,8 +44,7 @@ const useGameStore = create<GameState>()(
 // Initialize auth state
 const initializeAuth = async () => {
   if (authInitialized) return;
-  authInitialized = true;
-
+  
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const store = useGameStore.getState();
@@ -56,9 +55,15 @@ const initializeAuth = async () => {
       if (store.position) {
         store.setWorldPosition(store.position.x, store.position.y);
       }
+    } else {
+      store.setUser(null);
     }
   } catch (error) {
     console.error('Error initializing auth:', error);
+    const store = useGameStore.getState();
+    store.setUser(null);
+  } finally {
+    authInitialized = true;
   }
 };
 
@@ -66,19 +71,26 @@ const initializeAuth = async () => {
 supabase.auth.onAuthStateChange(async (event, session) => {
   const store = useGameStore.getState();
   
-  if (event === 'SIGNED_IN') {
-    store.setUser(session?.user ?? null);
-    await store.loadUserProgress();
-    if (store.position) {
-      store.setWorldPosition(store.position.x, store.position.y);
+  try {
+    if (event === 'SIGNED_IN') {
+      store.setUser(session?.user ?? null);
+      await store.loadUserProgress();
+      if (store.position) {
+        store.setWorldPosition(store.position.x, store.position.y);
+      }
+    } else if (event === 'SIGNED_OUT') {
+      store.setUser(null);
+      store.setResources(0);
+      store.setWorldPosition(0, 0);
     }
-  } else if (event === 'SIGNED_OUT') {
+  } catch (error) {
+    console.error('Error handling auth state change:', error);
     store.setUser(null);
   }
 });
 
 // Initialize auth on load
-initializeAuth();
+initializeAuth().catch(console.error);
 
 // Set up Supabase realtime subscriptions
 const resourceChannel = supabase
@@ -149,72 +161,9 @@ const resourceChannel = supabase
   )
   .subscribe();
 
-const structureChannel = supabase
-  .channel('structure-changes')
-  .on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'structures'
-    },
-    async (payload) => {
-      const store = useGameStore.getState();
-      
-      switch (payload.eventType) {
-        case 'DELETE': {
-          store.syncStructures(
-            store.structures.filter(s => s.id !== payload.old.id)
-          );
-          break;
-        }
-        case 'UPDATE': {
-          const updatedStructure = {
-            id: payload.new.id,
-            type: payload.new.type,
-            position: {
-              x: payload.new.position_x,
-              y: payload.new.position_y
-            },
-            owner: payload.new.owner,
-            health: payload.new.health,
-            lastGather: new Date(payload.new.last_gather).getTime()
-          };
-          
-          store.syncStructures(
-            store.structures.map(s => 
-              s.id === updatedStructure.id ? updatedStructure : s
-            )
-          );
-          break;
-        }
-        case 'INSERT': {
-          const newStructure = {
-            id: payload.new.id,
-            type: payload.new.type,
-            position: {
-              x: payload.new.position_x,
-              y: payload.new.position_y
-            },
-            owner: payload.new.owner,
-            health: payload.new.health,
-            lastGather: new Date(payload.new.last_gather).getTime()
-          };
-          
-          if (!store.structures.some(s => s.id === newStructure.id)) {
-            store.syncStructures([...store.structures, newStructure]);
-          }
-          break;
-        }
-      }
-    }
-  )
-  .subscribe();
-
 // Cleanup on window unload
 window.addEventListener('unload', () => {
   resourceChannel.unsubscribe();
-  structureChannel.unsubscribe();
   if (saveTimeout) {
     window.clearTimeout(saveTimeout);
   }
