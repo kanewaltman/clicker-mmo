@@ -39,3 +39,26 @@ input, textarea {
 body {
   overscroll-behavior-y: none;
 }
+
+/* Minimal scrollbar styles */
+.leaderboard-view-content .overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.leaderboard-view-content .overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.leaderboard-view-content .overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.leaderboard-view-content .overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.leaderboard-view-content .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}

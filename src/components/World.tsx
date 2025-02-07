@@ -10,6 +10,7 @@ import { TownCenter } from './world/TownCenter';
 import { Leaderboard } from './world/Leaderboard';
 import { AllTimeLeaderboard } from './world/AllTimeLeaderboard';
 import { MobileMenu } from './MobileMenu';
+import { DesktopMenu } from './DesktopMenu';
 import { useAFKDetection } from './world/hooks/useAFKDetection';
 import { useCursorSync } from './world/hooks/useCursorSync';
 import { useWorldControls } from './world/hooks/useWorldControls';
@@ -35,6 +36,7 @@ const World: React.FC = () => {
   const [isPanning, setIsPanning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [placingStructure, setPlacingStructure] = useState(false);
   const [isAFK, setIsAFK] = useState(false);
   const [draggingStructure, setDraggingStructure] = useState<string | null>(null);
@@ -82,12 +84,15 @@ const World: React.FC = () => {
       if (e.key === 'F3') {
         e.preventDefault();
         setShowSpawnDebug(prev => !prev);
+      } else if (e.key === 'Escape' && !isMenuOpen) {
+        e.preventDefault();
+        setIsMenuOpen(true);
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, []);
+  }, [isMenuOpen]);
 
   const resetAFKTimer = useAFKDetection(gameStore.afkTimeout, setIsAFK);
 
@@ -342,7 +347,7 @@ const World: React.FC = () => {
         <>
           <div className="absolute top-4 right-4 z-10">
             <button
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={() => setIsMenuOpen(true)}
               className="bg-gray-800 p-2 rounded-full hover:bg-gray-700 transition-colors"
             >
               <Settings className="text-white" size={24} />
@@ -356,6 +361,13 @@ const World: React.FC = () => {
             players={topPlayers}
             currentUserId={userId}
             onMouseDown={handleLeaderboardMouseDown}
+          />
+
+          <DesktopMenu
+            isOpen={isMenuOpen}
+            onClose={() => setIsMenuOpen(false)}
+            onOpenShop={() => setIsShopOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
           />
 
           <div className="absolute bottom-4 left-4 z-10 flex gap-2">
@@ -492,4 +504,4 @@ const World: React.FC = () => {
 
 export default World;
 
-export { World }
+export { World };

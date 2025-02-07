@@ -11,16 +11,21 @@ import { CursorsView } from './ui/menu/views/CursorsView';
 import { WorldMapView } from './ui/menu/views/WorldMapView';
 import { useMenuState } from './ui/menu/useMenuState';
 import { useMenuTransition } from './ui/menu/useMenuTransition';
-import { useTouchHandling } from './ui/menu/useTouchHandling';
 import type { MenuView } from './ui/menu/types';
 
-interface MobileMenuProps {
+interface DesktopMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
   onOpenShop: () => void;
   onOpenSettings: () => void;
 }
 
-export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettings }) => {
-  const [isOpen, setIsOpen] = useState(false);
+export const DesktopMenu: React.FC<DesktopMenuProps> = ({ 
+  isOpen, 
+  onClose,
+  onOpenShop, 
+  onOpenSettings 
+}) => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { teleportToCastle, resources } = useGameStore();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -65,42 +70,21 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     setIsTransitioning(false);
   }, [dispatch]);
 
-  const handleCloseSheet = useCallback(() => {
+  const handleCloseSheet = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     if (!sheetRef.current) return;
     
     const duration = 240;
-    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-    sheetRef.current.style.transform = 'translate3d(0, 120%, 0)';
+    sheetRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1), height ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    sheetRef.current.style.transform = 'translate3d(120%, -50%, 0)';
     
     setTimeout(() => {
-      setIsOpen(false);
+      onClose();
       resetMenuState();
     }, duration);
-  }, [resetMenuState]);
-
-  const { handleTouchStart, handleTouchMove, handleTouchEnd } = useTouchHandling({
-    onClose: handleCloseSheet,
-    setIsOpen
-  });
-
-  useEffect(() => {
-    const cacheViewHeights = () => {
-      document.querySelectorAll('[class$="-view-content"]').forEach(element => {
-        const viewName = element.className.match(/(\w+)-view-content/)?.[1];
-        if (viewName && viewName in viewHeightCache.current) {
-          viewHeightCache.current[viewName as MenuView] = element.getBoundingClientRect().height + 56;
-        }
-      });
-    };
-
-    cacheViewHeights();
-    const resizeObserver = new ResizeObserver(cacheViewHeights);
-    document.querySelectorAll('[class$="-view-content"]').forEach(element => {
-      resizeObserver.observe(element);
-    });
-
-    return () => resizeObserver.disconnect();
-  }, []);
+  }, [onClose, resetMenuState]);
 
   const handleNavigate = useCallback((view: MenuView) => {
     if (isTransitioning) return;
@@ -109,7 +93,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     handleViewTransition(menuState.view, view);
   }, [isTransitioning, menuState.view, handleViewTransition, dispatch]);
 
-  const handleBack = useCallback(() => {
+  const handleBack = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     if (isTransitioning || menuState.history.length === 0) return;
     setIsTransitioning(true);
     const previousView = menuState.history[menuState.history.length - 1];
@@ -117,28 +104,21 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     handleViewTransition(menuState.view, previousView, { direction: 'left' });
   }, [isTransitioning, menuState.view, menuState.history, handleViewTransition, dispatch]);
 
-  const handleOpenMenu = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    resetMenuState();
-    setIsOpen(true);
-  }, [resetMenuState]);
-
   useEffect(() => {
     if (isOpen && sheetRef.current) {
       requestAnimationFrame(() => {
         if (sheetRef.current) {
-          sheetRef.current.style.transform = 'translateY(100%)';
+          sheetRef.current.style.transform = 'translate3d(100%, -50%, 0)';
           
           requestAnimationFrame(() => {
             if (sheetRef.current) {
-              sheetRef.current.style.transition = 'transform 280ms cubic-bezier(0.32, 1.75, 0.65, 0.88)';
-              sheetRef.current.style.transform = 'translateY(-6px)';
+              sheetRef.current.style.transition = 'transform 280ms cubic-bezier(0.32, 1.75, 0.65, 0.88), height 280ms cubic-bezier(0.32, 1.75, 0.65, 0.88)';
+              sheetRef.current.style.transform = 'translate3d(-6px, -50%, 0)';
               
               setTimeout(() => {
                 if (sheetRef.current) {
-                  sheetRef.current.style.transition = 'transform 120ms cubic-bezier(0.4, 0, 0.2, 1)';
-                  sheetRef.current.style.transform = 'translateY(0)';
+                  sheetRef.current.style.transition = 'transform 120ms cubic-bezier(0.4, 0, 0.2, 1), height 120ms cubic-bezier(0.4, 0, 0.2, 1)';
+                  sheetRef.current.style.transform = 'translate3d(0, -50%, 0)';
                 }
               }, 280);
             }
@@ -148,28 +128,48 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        handleCloseSheet();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, handleCloseSheet]);
+
+  useEffect(() => {
+    const cacheViewHeights = () => {
+      document.querySelectorAll('[class$="-view-content"]').forEach(element => {
+        const viewName = element.className.match(/(\w+)-view-content/)?.[1];
+        if (viewName && viewName in viewHeightCache.current) {
+          // Add 36px padding (28px + 8px extra) to the height calculation
+          viewHeightCache.current[viewName as MenuView] = element.getBoundingClientRect().height + 36;
+        }
+      });
+    };
+
+    if (isOpen) {
+      cacheViewHeights();
+      const resizeObserver = new ResizeObserver(cacheViewHeights);
+      document.querySelectorAll('[class$="-view-content"]').forEach(element => {
+        resizeObserver.observe(element);
+      });
+
+      return () => resizeObserver.disconnect();
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const currentViewHeight = viewHeightCache.current[menuState.view] || 'auto';
+
   return (
     <>
-      <button
-        onClick={handleOpenMenu}
-        onTouchStart={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          handleOpenMenu(e);
-        }}
-        className="fixed bottom-4 right-4 z-[100] w-14 h-14 bg-stone-900 rounded-full flex items-center justify-center shadow-lg hover:bg-stone-800 transition-colors md:hidden game-ui"
-      >
-        <div className="w-6 h-6 bg-white/10 rounded-full" />
-      </button>
-
       <div
-        className={`fixed inset-0 bg-black/50 z-[150] transition-opacity duration-300 md:hidden game-ui ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className="fixed inset-0 bg-black/50 z-[150] transition-opacity duration-300"
         onClick={handleCloseSheet}
       />
 
@@ -177,39 +177,28 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ onOpenShop, onOpenSettin
         ref={sheetRef}
         role="navigation"
         aria-label="User menu"
-        className={`
-          fixed inset-x-2 bottom-2 
-          bg-[#1E1E1E] rounded-[32px] 
-          z-[151] md:hidden game-ui
-          overflow-hidden
-          ${!isOpen && 'pointer-events-none'}
-        `}
+        className="fixed left-1/2 top-1/2 w-[400px] bg-[#1E1E1E] rounded-[32px] z-[151] overflow-hidden"
         onClick={e => e.stopPropagation()}
         style={{ 
-          willChange: 'transform',
-          touchAction: 'none',
-          transform: 'translate3d(0, 120%, 0)',
-          transition: 'transform 200ms ease-out',
-          height: viewHeightCache.current[menuState.view] || 'auto'
+          willChange: 'transform, height',
+          transform: 'translate3d(120%, -50%, 0)',
+          transition: 'transform 200ms ease-out, height 200ms ease-out',
+          height: currentViewHeight,
+          marginLeft: '-200px' // Half of width for perfect centering
         }}
       >
-        <div 
-          className="flex flex-col pt-2 drag-handle"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
-          <div className="flex self-center bg-zinc-300/10 h-[5px] rounded-[34px] w-[55px] mb-4" />
-          
+        <div className="flex flex-col pt-2">
           <div className="relative">
-            <MenuHeader currentView={menuState.view} onNavigate={handleNavigate} isDesktop={false} />
+            <MenuHeader currentView={menuState.view} onNavigate={handleNavigate} isDesktop={true} />
 
             <div ref={viewsContainerRef} className="relative">
               <div className={`main-view-content ${menuState.view !== 'main' ? 'hidden' : ''}`}>
                 <MainView
                   onNavigate={handleNavigate}
                   onOpenSettings={onOpenSettings}
-                  onTeleport={() => {
+                  onTeleport={(e?: React.MouseEvent) => {
+                    e?.preventDefault();
+                    e?.stopPropagation();
                     if (resources > 0) {
                       teleportToCastle();
                       handleCloseSheet();
