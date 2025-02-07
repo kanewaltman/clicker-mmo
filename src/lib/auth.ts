@@ -21,46 +21,34 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   try {
-    // First sign out from Supabase
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-
-    // Clear all Supabase-related localStorage data
-    const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname.split('.')[0];
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(prefix)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-
-    // Clear session storage as well
+    // Clear all storage first
+    localStorage.clear();
     sessionStorage.clear();
 
-    // Force a clean reload
-    window.location.href = window.location.origin + window.location.pathname;
+    // Then sign out from Supabase
+    const { error } = await supabase.auth.signOut({
+      scope: 'global'
+    });
+    
+    if (error) throw error;
+
+    // Wait a moment to ensure signout is complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Force a clean reload without any cache
+    window.location.replace(window.location.origin + window.location.pathname);
   } catch (error) {
     console.error('Error signing out:', error);
     // Force reload even if there's an error
-    window.location.href = window.location.origin + window.location.pathname;
+    window.location.replace(window.location.origin + window.location.pathname);
   }
 }
 
 export function subscribeToAuthChanges(callback: (session: any) => void) {
   return supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
-      // Clear any remaining auth data
-      const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname.split('.')[0];
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(prefix)) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      // Clear all storage on sign out
+      localStorage.clear();
       sessionStorage.clear();
     }
     callback(session);
