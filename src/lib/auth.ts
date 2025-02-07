@@ -15,7 +15,7 @@ export async function signInWithGoogle() {
         prompt: 'consent',
       },
       redirectTo: isMobile ? baseUrl : window.location.origin,
-      skipBrowserRedirect: false // Ensure redirect happens automatically
+      skipBrowserRedirect: false
     }
   });
   
@@ -25,21 +25,28 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   try {
-    // First clear any stored session data
+    // First kill the session
+    await supabase.auth.setSession(null);
+    
+    // Then clear any stored session data
     await supabase.auth.clearSession();
     
-    // Then sign out
-    const { error } = await supabase.auth.signOut({
-      scope: 'global' // Sign out from all tabs/windows
-    });
-    
+    // Finally sign out
+    const { error } = await supabase.auth.signOut();
     if (error) throw error;
 
-    // Force reload the page to ensure clean state
-    // This is particularly important for Chromium browsers
-    window.location.reload();
+    // Small delay to ensure session cleanup completes
+    setTimeout(() => {
+      // Clear any localStorage data
+      localStorage.removeItem('sb-' + supabase.supabaseUrl + '-auth-token');
+      
+      // Force a hard reload to clear any cached state
+      window.location.href = window.location.origin + window.location.pathname;
+    }, 100);
   } catch (error) {
     console.error('Error signing out:', error);
+    // Even if there's an error, try to force a clean state
+    window.location.href = window.location.origin + window.location.pathname;
     throw error;
   }
 }
