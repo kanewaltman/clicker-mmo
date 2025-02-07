@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useGameStore } from '../../../../store/gameStore';
-import { Home } from 'lucide-react';
+import { Home, Navigation } from 'lucide-react';
 
 interface WorldMapViewProps {
   onBack: () => void;
@@ -51,15 +51,21 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
       ctx.fill();
     });
 
-    // Draw viewport rectangle
+    // Draw viewport rectangle with offset
     const viewportWidth = window.innerWidth * WORLD_SCALE * zoom;
     const viewportHeight = window.innerHeight * WORLD_SCALE * zoom;
-    const viewportX = centerX - (worldPosition.x * WORLD_SCALE - pan.x) * zoom - viewportWidth / 2;
-    const viewportY = centerY - (worldPosition.y * WORLD_SCALE - pan.y) * zoom - viewportHeight / 2;
+    
+    // Calculate base position (centered)
+    const baseX = centerX - (worldPosition.x * WORLD_SCALE - pan.x) * zoom - viewportWidth / 2;
+    const baseY = centerY - (worldPosition.y * WORLD_SCALE - pan.y) * zoom - viewportHeight / 2;
+    
+    // Apply the full offset (50% of viewport dimensions)
+    const offsetX = baseX + viewportWidth / 2;
+    const offsetY = baseY + viewportHeight / 2;
 
     ctx.strokeStyle = '#FFFFFF';
     ctx.lineWidth = 1;
-    ctx.strokeRect(viewportX, viewportY, viewportWidth, viewportHeight);
+    ctx.strokeRect(offsetX, offsetY, viewportWidth, viewportHeight);
 
     // Draw castle at center
     ctx.fillStyle = '#FFD700';
@@ -72,7 +78,8 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       // Single touch for panning
-      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      const touch = e.touches[0];
+      lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
       setIsDragging(true);
     } else if (e.touches.length === 2) {
       // Two touches for pinch zoom
@@ -85,17 +92,17 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 1 && lastTouchRef.current && isDragging) {
-      // Handle panning
-      const deltaX = e.touches[0].clientX - lastTouchRef.current.x;
-      const deltaY = e.touches[0].clientY - lastTouchRef.current.y;
+    if (isDragging && e.touches.length === 1 && lastTouchRef.current) {
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - lastTouchRef.current.x;
+      const deltaY = touch.clientY - lastTouchRef.current.y;
       
       setPan(prev => ({
         x: prev.x + deltaX / zoom,
         y: prev.y + deltaY / zoom
       }));
-
-      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      
+      lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
     } else if (e.touches.length === 2 && lastPinchDistanceRef.current !== null) {
       // Handle pinch zoom
       const distance = Math.hypot(
@@ -150,6 +157,14 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
     setZoom(newZoom);
   };
 
+  // Center on viewport
+  const handleCenterViewport = () => {
+    setPan({
+      x: worldPosition.x * WORLD_SCALE,
+      y: worldPosition.y * WORLD_SCALE
+    });
+  };
+
   return (
     <div className="px-4 pb-16 worldmap-view-content">
       {/* Map container */}
@@ -185,6 +200,16 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({ onBack }) => {
             className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-white"
           >
             -
+          </button>
+        </div>
+
+        {/* Center viewport button */}
+        <div className="absolute bottom-4 left-4">
+          <button
+            onClick={handleCenterViewport}
+            className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-white"
+          >
+            <Navigation className="w-4 h-4" />
           </button>
         </div>
 
