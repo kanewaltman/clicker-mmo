@@ -1,10 +1,7 @@
 import { supabase } from './supabase';
 
 export async function signInWithGoogle() {
-  // Get the current URL without any query parameters
   const baseUrl = window.location.origin + window.location.pathname;
-  
-  // Check if we're on mobile
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -14,8 +11,7 @@ export async function signInWithGoogle() {
         access_type: 'offline',
         prompt: 'consent',
       },
-      redirectTo: isMobile ? baseUrl : window.location.origin,
-      skipBrowserRedirect: false
+      redirectTo: isMobile ? baseUrl : window.location.origin
     }
   });
   
@@ -25,34 +21,43 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   try {
-    // First kill the session
-    await supabase.auth.setSession(null);
-    
-    // Then clear any stored session data
-    await supabase.auth.clearSession();
-    
-    // Finally sign out
-    const { error } = await supabase.auth.signOut();
+    // Clear all local storage data first
+    const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) {
+        localStorage.removeItem(key);
+      }
+    }
+
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut({
+      scope: 'local'
+    });
     if (error) throw error;
 
-    // Small delay to ensure session cleanup completes
-    setTimeout(() => {
-      // Clear any localStorage data
-      localStorage.removeItem('sb-' + supabase.supabaseUrl + '-auth-token');
-      
-      // Force a hard reload to clear any cached state
-      window.location.href = window.location.origin + window.location.pathname;
-    }, 100);
+    // Force a clean reload after a brief delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+    window.location.replace(window.location.origin + window.location.pathname);
   } catch (error) {
     console.error('Error signing out:', error);
-    // Even if there's an error, try to force a clean state
-    window.location.href = window.location.origin + window.location.pathname;
-    throw error;
+    // Force reload even if there's an error
+    window.location.replace(window.location.origin + window.location.pathname);
   }
 }
 
 export function subscribeToAuthChanges(callback: (session: any) => void) {
   return supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      // Clear any remaining auth data
+      const prefix = 'sb-' + new URL(supabase.supabaseUrl).hostname;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(prefix)) {
+          localStorage.removeItem(key);
+        }
+      }
+    }
     callback(session);
   });
 }
