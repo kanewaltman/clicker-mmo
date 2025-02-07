@@ -53,14 +53,12 @@ export async function signOut() {
 }
 
 export function subscribeToAuthChanges(callback: (session: any) => void) {
-  // Clean up URL parameters after successful auth
-  if (window.location.search.includes('time=')) {
-    const cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-  }
-
   return supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT') {
+    if (event === 'SIGNED_IN') {
+      // Clean up URL parameters after successful auth
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    } else if (event === 'SIGNED_OUT') {
       // Clear all storage on sign out
       localStorage.clear();
       sessionStorage.clear();
