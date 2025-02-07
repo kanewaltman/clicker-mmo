@@ -24,8 +24,24 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  try {
+    // First clear any stored session data
+    await supabase.auth.clearSession();
+    
+    // Then sign out
+    const { error } = await supabase.auth.signOut({
+      scope: 'global' // Sign out from all tabs/windows
+    });
+    
+    if (error) throw error;
+
+    // Force reload the page to ensure clean state
+    // This is particularly important for Chromium browsers
+    window.location.reload();
+  } catch (error) {
+    console.error('Error signing out:', error);
+    throw error;
+  }
 }
 
 export function subscribeToAuthChanges(callback: (session: any) => void) {
