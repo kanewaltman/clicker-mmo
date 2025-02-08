@@ -105,9 +105,15 @@ const World: React.FC = () => {
         return;
       }
 
-      if (e.key === 'Escape' && !isMenuOpen) {
+      if (e.key === 'Escape') {
         e.preventDefault();
-        setIsMenuOpen(true);
+        if (!isMenuOpen) {
+          setIsMenuOpen(true);
+          menuStateRef.current = null;
+        } else {
+          setIsMenuOpen(false);
+          menuStateRef.current = null;
+        }
         return;
       }
 
