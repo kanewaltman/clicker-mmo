@@ -171,28 +171,40 @@ export const DesktopMenu: React.FC<DesktopMenuProps> = ({
 
   // Handle initial view
   useEffect(() => {
-    if (isOpen && initialView && menuState.view !== initialView) {
-      dispatch({ type: 'PUSH_VIEW', payload: initialView });
+    if (isOpen && initialView) {
+      // Reset menu state first to ensure main view is properly initialized
+      resetMenuState();
       
-      // Wait for next frame to ensure the menu is rendered
-      requestAnimationFrame(() => {
-        if (viewsContainerRef.current) {
-          // Hide main view and show target view immediately
-          Array.from(viewsContainerRef.current.children).forEach(view => {
-            if (view instanceof HTMLElement) {
-              if (view.classList.contains(`${initialView}-view-content`)) {
-                view.style.display = 'block';
-                view.style.opacity = '1';
-                view.style.transform = 'translateX(0)';
-              } else {
-                view.style.display = 'none';
+      // Then navigate to the initial view
+      if (initialView !== 'main') {
+        dispatch({ type: 'PUSH_VIEW', payload: initialView });
+        
+        // Wait for next frame to ensure the menu is rendered
+        requestAnimationFrame(() => {
+          if (viewsContainerRef.current) {
+            // Show both views initially
+            Array.from(viewsContainerRef.current.children).forEach(view => {
+              if (view instanceof HTMLElement) {
+                if (view.classList.contains('main-view-content') || 
+                    view.classList.contains(`${initialView}-view-content`)) {
+                  view.style.display = 'block';
+                  view.style.position = 'absolute';
+                  view.style.top = '0';
+                  view.style.left = '0';
+                  view.style.width = '100%';
+                } else {
+                  view.style.display = 'none';
+                }
               }
-            }
-          });
-        }
-      });
+            });
+
+            // Trigger transition
+            handleViewTransition('main', initialView);
+          }
+        });
+      }
     }
-  }, [isOpen, initialView, menuState.view, dispatch]);
+  }, [isOpen, initialView, dispatch, resetMenuState, handleViewTransition]);
 
   if (!isOpen) return null;
 
