@@ -18,13 +18,17 @@ interface DesktopMenuProps {
   onClose: () => void;
   onOpenShop: () => void;
   onOpenSettings: () => void;
+  onOpen: () => void;
+  initialView?: MenuView | null;
 }
 
 export const DesktopMenu: React.FC<DesktopMenuProps> = ({ 
   isOpen, 
   onClose,
   onOpenShop, 
-  onOpenSettings 
+  onOpenSettings,
+  onOpen,
+  initialView
 }) => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { teleportToCastle, resources } = useGameStore();
@@ -149,7 +153,6 @@ export const DesktopMenu: React.FC<DesktopMenuProps> = ({
       document.querySelectorAll('[class$="-view-content"]').forEach(element => {
         const viewName = element.className.match(/(\w+)-view-content/)?.[1];
         if (viewName && viewName in viewHeightCache.current) {
-          // Add 36px padding (28px + 8px extra) to the height calculation
           viewHeightCache.current[viewName as MenuView] = element.getBoundingClientRect().height + 36;
         }
       });
@@ -165,6 +168,31 @@ export const DesktopMenu: React.FC<DesktopMenuProps> = ({
       return () => resizeObserver.disconnect();
     }
   }, [isOpen]);
+
+  // Handle initial view
+  useEffect(() => {
+    if (isOpen && initialView && menuState.view !== initialView) {
+      dispatch({ type: 'PUSH_VIEW', payload: initialView });
+      
+      // Wait for next frame to ensure the menu is rendered
+      requestAnimationFrame(() => {
+        if (viewsContainerRef.current) {
+          // Hide main view and show target view immediately
+          Array.from(viewsContainerRef.current.children).forEach(view => {
+            if (view instanceof HTMLElement) {
+              if (view.classList.contains(`${initialView}-view-content`)) {
+                view.style.display = 'block';
+                view.style.opacity = '1';
+                view.style.transform = 'translateX(0)';
+              } else {
+                view.style.display = 'none';
+              }
+            }
+          });
+        }
+      });
+    }
+  }, [isOpen, initialView, menuState.view, dispatch]);
 
   if (!isOpen) return null;
 

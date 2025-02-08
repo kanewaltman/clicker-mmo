@@ -17,6 +17,7 @@ import { useWorldControls } from './world/hooks/useWorldControls';
 import { SpawnDebug } from './world/SpawnDebug';
 import { useSpatialPartitioning } from './world/hooks/useSpatialPartitioning';
 import { useViewportCulling } from './world/hooks/useViewportCulling';
+import type { MenuView } from './ui/menu/types';
 import {
   TOWN_CENTER,
   TOWN_RADIUS,
@@ -25,11 +26,23 @@ import {
 } from './world/constants';
 import type { Structure as StructureType, WorldResource } from '../store/gameStore';
 
+// Define hotkey mappings
+const HOTKEY_MAP: Record<string, MenuView> = {
+  'i': 'inventory',
+  'e': 'inventory', // Alternative for inventory
+  's': 'social',
+  'l': 'leaderboard',
+  'm': 'worldmap',
+  'p': 'preferences',
+  'c': 'cursors'
+};
+
 const World: React.FC = () => {
   const initRef = useRef(false);
   const positionInitRef = useRef(false);
   const userId = useRef(crypto.randomUUID()).current;
   const gameStore = useGameStore();
+  const menuStateRef = useRef<MenuView | null>(null);
 
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
@@ -81,12 +94,37 @@ const World: React.FC = () => {
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Ignore hotkeys if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
       if (e.key === 'F3') {
         e.preventDefault();
         setShowSpawnDebug(prev => !prev);
-      } else if (e.key === 'Escape' && !isMenuOpen) {
+        return;
+      }
+
+      if (e.key === 'Escape' && !isMenuOpen) {
         e.preventDefault();
         setIsMenuOpen(true);
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      const targetView = HOTKEY_MAP[key];
+
+      if (!targetView) return;
+      e.preventDefault();
+
+      if (!isMenuOpen) {
+        setIsMenuOpen(true);
+        menuStateRef.current = targetView;
+      } else if (menuStateRef.current === targetView) {
+        setIsMenuOpen(false);
+        menuStateRef.current = null;
+      } else {
+        menuStateRef.current = targetView;
       }
     };
 
@@ -306,6 +344,15 @@ const World: React.FC = () => {
     });
   }, [leaderboardPosition]);
 
+  const handleOpenMenu = useCallback(() => {
+    setIsMenuOpen(true);
+  }, []);
+
+  const handleCloseMenu = useCallback(() => {
+    setIsMenuOpen(false);
+    menuStateRef.current = null;
+  }, []);
+
   const allPlayers = useMemo(() => {
     const localPlayer = { 
       id: `local-${userId}`, 
@@ -347,7 +394,7 @@ const World: React.FC = () => {
         <>
           <div className="absolute top-4 right-4 z-10">
             <button
-              onClick={() => setIsMenuOpen(true)}
+              onClick={handleOpenMenu}
               className="bg-gray-800 p-2 rounded-full hover:bg-gray-700 transition-colors"
             >
               <Settings className="text-white" size={24} />
@@ -365,9 +412,11 @@ const World: React.FC = () => {
 
           <DesktopMenu
             isOpen={isMenuOpen}
-            onClose={() => setIsMenuOpen(false)}
+            onClose={handleCloseMenu}
             onOpenShop={() => setIsShopOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpen={handleOpenMenu}
+            initialView={menuStateRef.current}
           />
 
           <div className="absolute bottom-4 left-4 z-10 flex gap-2">
